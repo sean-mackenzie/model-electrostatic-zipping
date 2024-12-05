@@ -42,10 +42,10 @@ if __name__ == '__main__':
     base_dir = '/Users/mackenzie/Desktop/zipper_paper'
 
     # specific inputs
-    wid = 5
-    fid = 13
-    depth = 122
-    radius = 707
+    wid = 14
+    fid = 3
+    depth = 195
+    radius = 1772
     max_dz_for_strain_plot = depth - 3
     units = 1e-6
     num_segments = 3500  # NOTE: this isn't necessarily the final number of solver segments
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     # plot
     path_save = save_dir
 
-    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(6, 5))
+    fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True, figsize=(6, 6))
 
     for j in range(len(dfs)):
 
@@ -232,6 +232,7 @@ if __name__ == '__main__':
         df['strain_xy'] = df['stretch_i'] / df['stretch_i'].iloc[0]
         df['strain_z'] = df['t_i'] / df['t_i'].iloc[0]
         df['strain_z_inv'] = 1 / df['strain_z']
+        df['disp_r_microns'] = (df['x_i'] * (df['strain_xy'] - 1)) / 2 * 1e6  # divide by 2 = radial displacement
 
         if export_excel_strain:
             df.to_excel(join(path_save, save_id + '_strain-by-z_{}_{}.xlsx'.format(k_xlsx, vs_xlsx[j])))
@@ -249,16 +250,21 @@ if __name__ == '__main__':
             ax2.plot(df['dZ'] * 1e6, df['strain_xy'], color=ls[0], ls='-')
             ax2.plot(df['dZ'] * 1e6, df['strain_z_inv'], color=ls[0], ls='--')
 
+        ax3.plot(df['dZ'] * 1e6, df['disp_r_microns'], ls)
+
         # -
 
-    ax1.set_ylabel('Memb. Thickness', fontsize=14)
+    ax1.set_ylabel('t (um)', fontsize=14)
     ax1.grid(alpha=0.25)
     ax1.legend(title=k_fig)
 
     ax2.set_ylabel('Strain', fontsize=14)
-    ax2.set_xlabel('z (um)', fontsize=14)
     ax2.grid(alpha=0.25)
     ax2.legend()
+
+    ax3.set_ylabel(r'$\Delta r \: (\mu m)$', fontsize=14)
+    ax3.set_xlabel('z (um)', fontsize=14)
+    ax3.grid(alpha=0.25)
 
     plt.tight_layout()
     if path_save is not None:
