@@ -4,17 +4,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import smu, dpt
-from utils import plotting
+import dpt
+from utils import plotting, empirical, fit
 
-"""
-df = DF
-xyms = ['g', 'm']
-tid = TID
-PLOT_COORDS = True
-path_root = PATH_REPRESENTATIVE
-dict_test
-"""
 
 def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # assign simple column labels
@@ -23,39 +15,43 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     pz, pdz = 'z', 'dz'
     # -
     # modifiers
-    eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    plot_pids_by_frame = True  # True: plot particle z-trajectories
-    plot_pids_by_synchronous_time_voltage = True
-    plot_pids_dz_by_voltage_ascending = True
-    plot_pids_dz_by_voltage_hysteresis = True
-    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    eval_pids_drz = False  # True: calculate/export net-displacement per-particle in r- and z-directions
+    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_pids_by_frame = False  # If you have voltage data, False
+    plot_pids_by_synchronous_time_voltage = False
+    plot_pids_dz_by_voltage_ascending = False  # Should probably always be False
+    plot_pids_dz_by_voltage_hysteresis = False
     # -
-    plot_1D_z_by_r_by_frame = True
-    plot_1D_dz_by_r_by_frame = True
-    plot_2D_z_by_frame = True
-    plot_2D_dz_by_frame = True
-    plot_2D_dr_by_frame = True
+    plot_1D_z_by_r_by_frame = False
+    plot_1D_dz_by_r_by_frame = False
+    plot_2D_z_by_frame = False
+    plot_2D_dz_by_frame = False
+    plot_2D_dr_by_frame = False
+    # -
+    plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    # for contourf plots
+    levels_z = 10
+    levels_r = 5
+    # -
     if xym == 'm':
+        plot_pids_by_synchronous_time_voltage = False
+        plot_pids_dz_by_voltage_ascending = False
+        plot_pids_dz_by_voltage_hysteresis = False
         plot_1D_z_by_r_by_frame = False
         plot_1D_dz_by_r_by_frame = False
         plot_2D_z_by_frame = False
         plot_2D_dz_by_frame = False
-    # for contourf plots
-    levels_z = 40
-    levels_r = 25
-
+        plot_1D_dz_by_r_by_frame_with_surface_profile = False
     """
-    ANALYSES TO ADD:
-        1. Identifying the zipping interface
-            * How? See next. 
-        2. It would be interesting to add a plot showing: VELOCITY (i.e., change in position wrt time)
-            * Why? Because, it should reveal the zipping interface!
-                ** When a particle is on the suspended membrane, it is moving (i.e., VELOCITY != 0)
-                ** When a particle zips against the sidewall, it effectively becomes stationary (i.e., V = 0!)
-                ** So, a 1D plot of velocity vs. radius, or, 2D contour plot of velocity vs. (x, y),
-                    should reveal the zipping interface. 
-            * But here is what may be really, really interesting:
-                ** Knowing the exact position of the zipping interface, we can evaluate SLIPPAGE ALONG THE SIDEWALL! 
+    ANALYSES TO ADD: 
+        1. Plot circle to show through-hole in 2D heat maps to understand its effects
+        2. Plot concentric rings around r = 0 in 2D heat maps to show radial coordinate
+        3. Start writing that paper!
+            * Need to focus on what is going into the paper (with the data I have now)
+            * And what other experiments would be useful/interesting (e.g., AC voltage)
+            * I think one of the biggest contributions would be solving the "collapse" issue
+                ** Does an AC voltage "solve" (or at least help) the collapse issue?
+                ** What about very short DC pulses that alternate polarity (i.e., bipolar)?
     """
 
     # -
@@ -69,16 +65,19 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     path_results_2D_z_by_frame = join(path_results_rep, '2D_z_by_frame')
     path_results_2D_dz_by_frame = join(path_results_rep, '2D_dz_by_frame')
     path_results_2D_dr_by_frame = join(path_results_rep, '2D_dr_by_frame')
+    path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dz-r_by_frame_w-surface')
     # make directories
     pths = [path_results_rep,
             path_results_pids_by_frame, path_results_pids_by_synchronous_time_voltage,
             path_results_pids_dz_by_voltage_ascending, path_results_pids_dz_by_voltage_hysteresis,
             path_results_1D_z_by_r_by_frame, path_results_1D_dz_by_r_by_frame,
-            path_results_2D_z_by_frame, path_results_2D_dz_by_frame, path_results_2D_dr_by_frame]
+            path_results_2D_z_by_frame, path_results_2D_dz_by_frame, path_results_2D_dr_by_frame,
+            path_results_1D_dz_by_r_by_frame_w_surf]
     mods = [True, plot_pids_by_frame, plot_pids_by_synchronous_time_voltage,
             plot_pids_dz_by_voltage_ascending, plot_pids_dz_by_voltage_hysteresis,
             plot_1D_z_by_r_by_frame, plot_1D_dz_by_r_by_frame,
-            plot_2D_z_by_frame, plot_2D_dz_by_frame, plot_2D_dr_by_frame]
+            plot_2D_z_by_frame, plot_2D_dz_by_frame, plot_2D_dr_by_frame,
+            plot_1D_dz_by_r_by_frame_with_surface_profile]
     pths = [x for x, y in zip(pths, mods) if y is True]
     for pth in pths:
         if not os.path.exists(pth):
@@ -86,6 +85,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # ---
     # initialize some variables
     dfd = None
+
     # --- evaluate net displacement per-pid
     if eval_pids_drz:
         dfd = dpt.calculate_net_displacement(
@@ -95,6 +95,45 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             end_frames=dict_test['dpt_end_frames'],
             path_results=path_results_rep,
         )
+
+    # --- plot 2D heat map
+    if plot_heatmaps:
+        if dfd is None:
+            dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
+        # ---
+        plotting.plot_2D_heatmap(df=dfd,
+                                 pxyz=(px, py, 'dz_mean'),
+                                 savepath=join(path_results_rep, 'dz-mean_per_pid_2D.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_z,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
+        plotting.plot_2D_heatmap(df=dfd,
+                                 pxyz=(px, py, 'dr_mean'),
+                                 savepath=join(path_results_rep, 'dr-mean_per_pid_2D.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_r,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r \: (\mu m)$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
+        plotting.plot_2D_heatmap(df=dfd,
+                                 pxyz=(px, py, 'r_strain'),
+                                 savepath=join(path_results_rep, 'dr-strain_per_pid_2D.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_r,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r / r$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
     # --- plot displacement trajectories
     if plot_pids_by_frame:
         if dfd is None:
@@ -110,37 +149,6 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 dzr_mean=(dz_mean, dr_mean),
                 path_results=path_results_pids_by_frame,
             )
-
-    # --- plot 2D heat map
-    if plot_heatmaps:
-        if dfd is None:
-            dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
-        # ---
-        plotting.plot_2D_heatmap(df=dfd,
-                                 pxyz=(px, py, 'dz_mean'),
-                                 savepath=join(path_results_rep, 'dz-mean_per_pid_2D.png'),
-                                 field=(0, dict_settings['field_of_view']),
-                                 interpolate='linear',
-                                 levels=levels_z,
-                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$')
-                                 )
-        plotting.plot_2D_heatmap(df=dfd,
-                                 pxyz=(px, py, 'dr_mean'),
-                                 savepath=join(path_results_rep, 'dr-mean_per_pid_2D.png'),
-                                 field=(0, dict_settings['field_of_view']),
-                                 interpolate='linear',
-                                 levels=levels_r,
-                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r \: (\mu m)$'),
-                                 )
-
-        plotting.plot_2D_heatmap(df=dfd,
-                                 pxyz=(px, py, 'r_strain'),
-                                 savepath=join(path_results_rep, 'dr-strain_per_pid_2D.png'),
-                                 field=(0, dict_settings['field_of_view']),
-                                 interpolate='linear',
-                                 levels=levels_r,
-                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r / r$'),
-                                 )
 
     # --- plot synchronous coords + voltage
     if plot_pids_by_synchronous_time_voltage or plot_pids_dz_by_voltage_ascending or plot_pids_dz_by_voltage_hysteresis:
@@ -171,14 +179,18 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
             # ---
 
-    # --- plot 2D heat maps for each frame
+    # ---
+
+    # --- -- FOR EACH FRAME
+
+    # --- plot 2D heat maps
     if plot_1D_z_by_r_by_frame or plot_1D_dz_by_r_by_frame or plot_2D_z_by_frame or plot_2D_dz_by_frame or plot_2D_dr_by_frame:
         rmin, rmax = 0, df[pr].max()
         zmin, zmax = df[pz].min(), df[pz].max()
         dzmin, dzmax = df[pdz].min(), df[pdz].max()
         drmin, drmax = df[pdr].min(), df[pdr].max()
         # ---
-        for frame in np.arange(dict_test['dpt_start_frame'], dict_test['dpt_end_frames'][1] + 1):
+        for frame in np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):
             df_frame = df[df['frame'] == frame]
             # -
             if plot_1D_z_by_r_by_frame:
@@ -241,3 +253,44 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                                          units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r \: (\mu m)$'),
                                          title='frame: {:03d}'.format(frame),
                                          )
+
+    # --- -- PLOT SURFACE PROFILE WITH 3D DPT COORDS, FOR EACH FRAME
+
+    # --- plot 2D heat maps
+    if plot_1D_dz_by_r_by_frame_with_surface_profile:
+        # read surface profile
+        df_surface = empirical.read_surface_profile(dict_settings, subset='right_half', hole=True, fid_override=None)
+        sr, sz = 'r', 'z'
+        surfr, surfz = df_surface[sr].to_numpy(), df_surface[sz].to_numpy()
+        # -
+        # get 3D DPT limits
+        rmin, rmax = 0, df[pr].max()
+        zmin, zmax = df[pz].min(), df[pz].max()
+        dzmin, dzmax = df[pdz].min(), df[pdz].max()
+        drmin, drmax = df[pdr].min(), df[pdr].max()
+        # ---
+        for frame in np.arange(310, 401): #np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):  # np.arange(300, 451): #
+            df_frame = df[df['frame'] == frame].sort_values(pr)
+            # -
+            if plot_1D_dz_by_r_by_frame_with_surface_profile:
+                x = df_frame[pr].to_numpy()
+                y = df_frame[pdz].to_numpy()
+                xnew, ynew, x, y = fit.wrapper_fit_radial_membrane_profile(x=x, y=y, s=3000,
+                    dict_settings=dict_settings, faux_r_zero=True, faux_r_edge=False,
+                )
+
+                fig, ax = plt.subplots(figsize=(5, 2.75))
+                ax.plot(surfr, surfz, '-', color='gray', lw=0.5, label='SP')
+                ax.plot(x, y, 'o', color='tab:blue', ms=1.5, label='FPs')
+                ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit')
+                ax.set_xlabel(r'$r \: (\mu m)$')
+                ax.set_xlim(rmin, rmax + 5)
+                ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+                ax.set_ylim(dzmin - 2.5, dzmax + 2.5)
+                ax.grid(alpha=0.25)
+                ax.set_title('frame: {:03d}'.format(frame))
+                plt.tight_layout()
+                plt.savefig(join(path_results_1D_dz_by_r_by_frame_w_surf, 'dz-r_by_fr{:03d}.png'.format(frame)),
+                            dpi=300, facecolor='w')
+                plt.close()
+            # ---

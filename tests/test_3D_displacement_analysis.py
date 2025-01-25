@@ -3,18 +3,18 @@ from os.path import join
 import pandas as pd
 
 import smu, dpt
-from utils import settings, analyses
+from utils import settings, analyses, plotting
 
 
 if __name__ == "__main__":
     """
     NOTES:
         1. requires: analyses/settings/dict_settings.xlsx
-        2. if analyses/settings/dict_test_settings.xlsx is not found, must enter: START_FRAME, END_FRAMES
+        2. if analyses/settings/dict_tid{}_settings.xlsx is not found, must enter: START_FRAME, END_FRAMES
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_ID = '01132025_W14-F1_C9-0pT'
+    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
     TID = 1
 
     """
@@ -50,17 +50,27 @@ if __name__ == "__main__":
 
     # -
     # PRE-PROCESSING
-    PRE_PROCESS_COORDS = True
-    PRE_PROCESS_IV = True
-    MERGE_COORDS_AND_VOLTAGE = True
+    PRE_PROCESS_COORDS = False  # True False
+    PRE_PROCESS_IV = False
+    MERGE_COORDS_AND_VOLTAGE = False
+    VERIFY_SETTINGS = False
     # -
     # ANALYSES
-    SECOND_PASS_XYM = ['g', 'm']  # use sub-pixel or discrete in-plane localization method
+    SECOND_PASS_XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization method
     # -
     # ---
     # -
-    # OPTIONAL (not always required)
-    START_FRAME, END_FRAMES = 1, (1, 1)  # only used if test_settings.xlsx is not found
+    # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # only used if test_settings.xlsx is not found
+    """
+    tid     start_frame, (end_frames)
+    1       10, (170, 220)
+    2       20, (120, 125)
+    3       10, (240, 250)
+    4       50, (120, 125)
+    5       5, (90, 110)
+    6       (90, 100), (235, 245)
+    """
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -71,11 +81,11 @@ if __name__ == "__main__":
     # FILEPATHS
     # ---
     # directories
-    BASE_DIR = join('/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation', TEST_ID)
+    BASE_DIR = join('/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation', TEST_CONFIG)
     SAVE_DIR = join(BASE_DIR, 'analyses')
     SAVE_SETTINGS = join(SAVE_DIR, 'settings')
     SAVE_COORDS = join(SAVE_DIR, 'coords')
-    SAVE_COORDS_W_PIXELS = join(SAVE_COORDS, 'pixels')
+    # SAVE_COORDS_W_PIXELS = join(SAVE_COORDS, 'pixels')
     PATH_REPRESENTATIVE = join(SAVE_DIR, 'representative_test{}')
     # -
     # settings
@@ -91,12 +101,13 @@ if __name__ == "__main__":
     READ_IV_DIR = join(BASE_DIR, 'I-V')
     FN_IV_STARTS_WITH = 'tid{}_'.format(TID)
     FN_IV_SAVE = 'tid{}_I-V.xlsx'.format(TID)
+    FN_IV_AVG_SAVE = 'tid{}_average-V-t.xlsx'.format(TID)
     # Merged (3DPT + Keithley)
     FN_MERGED = 'tid{}_merged-coords-volt.xlsx'.format(TID)
     # -
     # -
     # make dirs
-    for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS, SAVE_COORDS_W_PIXELS]:
+    for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS]:
         if not os.path.exists(pth):
             os.makedirs(pth)
 
@@ -137,9 +148,10 @@ if __name__ == "__main__":
             DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS, test=DICT_TEST)
             # export transformed dataframe
             # for reference: physical + pixel coordinates
-            DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=False)
+            # DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=True)
             # for analysis: we need only keep physical coordinates (and frames) for compactness
-            PHYS_COLS = ['frame', 't_sync', 'dt', 'id', 'z', 'dz',
+            PHYS_COLS = ['frame', 't_sync', 'dt',
+                         'id', 'cm', 'z', 'dz',
                          'drg', 'drm', 'rg', 'rm',
                          'dxg', 'dxm', 'xg', 'xm',
                          'dyg', 'dym', 'yg', 'ym',
@@ -162,6 +174,9 @@ if __name__ == "__main__":
                 integration=DICT_SETTINGS['integration_time'],
             )
             DFV.to_excel(join(SAVE_COORDS, FN_IV_SAVE), index=False)
+            # Average voltage by time
+            DFVG = smu.average_voltage_by_source_time(df=DFV)
+            DFVG.to_excel(join(SAVE_COORDS, FN_IV_AVG_SAVE), index=False)
         else:
             DFV = pd.read_excel(join(SAVE_COORDS, FN_IV_SAVE))
         # --- Merge (3DPT + Keithley)
@@ -180,8 +195,21 @@ if __name__ == "__main__":
     # FIRST-PASS EVALUATION
     # ---
     """
-    Methods for validating/evaluating "correctness" of 3D particle tracking data. 
+    Verify settings 
     """
+    if VERIFY_SETTINGS:
+        plotting.plot_scatter_with_pid_labels(df=DF[DF['frame'] == 1],
+                                              pxy=('xg', 'yg'),
+                                              dict_settings=DICT_SETTINGS,
+                                              savepath=join(SAVE_SETTINGS, 'pid-labels_on_features.png'),
+                                              )
+
+        plotting.plot_scatter_on_image(df=DF[DF['frame'] == 1],
+                                       pxy=('xg', 'yg'),
+                                       dict_settings=DICT_SETTINGS,
+                                       savepath=join(SAVE_SETTINGS, 'pids-features_on_image.png'),
+                                       )
+
     # ------------------------------------------------------------------------------------------------------------------
     # ---
     # SECOND-PASS EVALUATION

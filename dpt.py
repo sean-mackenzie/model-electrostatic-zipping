@@ -54,19 +54,29 @@ def pre_process_coords(df, settings, test):
     # time
     df['dt'] = df['t_raw']
     # space
-    df0 = df[df['frame'] < start_frame].groupby('id').mean()
+    df0 = df[(df['frame'] > start_frame[0]) & (df['frame'] < start_frame[1])].groupby('id').mean()
     dfpids = []
     for pid in df['id'].unique():
         dfpid = df[df['id'] == pid]
         for v in ['xg', 'yg', 'rg', 'z', 'xm', 'ym', 'rm',
                   'xg_pix', 'yg_pix', 'rg_pix', 'xm_pix', 'ym_pix', 'rm_pix']:
-            dfpid['d' + v] = dfpid[v] - df0.iloc[pid][v]
+            dfpid['d' + v] = dfpid[v] - df0.loc[pid][v]
         dfpids.append(dfpid)
     df = pd.concat(dfpids)
+    df = df.reset_index(drop=True)
     return df
 
 
 def merge_with_iv(df, dfv):
+    """
+    Note, the index of df and dfv is important.
+    If df index is not [0, 1, 2, etc...], then I-V
+    data will not be correctly matched with coords.
+
+    :param df:
+    :param dfv:
+    :return:
+    """
     dfv_mid_source = dfv.groupby('STEP').mean().reset_index()
     dfv_mid_source = dfv_mid_source.round({'TIME': 4})
 
@@ -92,6 +102,9 @@ def find_closest(original_values, reference_values):
 
 
 def calculate_net_displacement(df, pxyrz, start_frame, end_frames, path_results):
+    if isinstance(start_frame, int):
+        start_frame = (0, start_frame)
+
     px = 'frame'
     x, y, r, z = pxyrz
     pids = df.sort_values(by=r, ascending=True)['id'].unique()
@@ -101,18 +114,18 @@ def calculate_net_displacement(df, pxyrz, start_frame, end_frames, path_results)
         dfpid = df[df['id'] == pid]
 
         # initial r-z position
-        x_pos_mean_i = dfpid[dfpid[px] < start_frame][x].mean()
-        y_pos_mean_i = dfpid[dfpid[px] < start_frame][y].mean()
-        r_pos_mean_i = dfpid[dfpid[px] < start_frame][r].mean()
-        z_pos_mean_i = dfpid[dfpid[px] < start_frame][z].mean()
+        x_pos_mean_i = dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][x].mean()
+        y_pos_mean_i = dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][y].mean()
+        r_pos_mean_i = dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][r].mean()
+        z_pos_mean_i = dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][z].mean()
 
         # dr analysis
-        r_mean_i = dfpid[dfpid[px] < start_frame][r].mean()
+        r_mean_i = r_pos_mean_i  # dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][r].mean()
         r_mean_f = dfpid[(dfpid[px] > end_frames[0]) & (dfpid[px] < end_frames[1])][r].mean()
         dr_mean = np.round(r_mean_f - r_mean_i, 2)
 
         # dz analysis
-        z_mean_i = dfpid[dfpid[px] < start_frame][z].mean()
+        z_mean_i = z_pos_mean_i  # dfpid[(dfpid[px] > start_frame[0]) & (dfpid[px] < start_frame[1])][z].mean()
         z_mean_f = dfpid[(dfpid[px] > end_frames[0]) & (dfpid[px] < end_frames[1])][z].mean()
         dz_mean = np.round(z_mean_f - z_mean_i, 2)
 
@@ -121,26 +134,28 @@ def calculate_net_displacement(df, pxyrz, start_frame, end_frames, path_results)
                         np.round(y_pos_mean_i, 1),
                         np.round(r_pos_mean_i, 1),
                         np.round(z_pos_mean_i, 1),
-                        np.round(r_mean_i, 2),
-                        np.round(z_mean_i, 1),
+                        # np.round(r_mean_i, 2),
+                        # np.round(z_mean_i, 1),
                         np.round(r_mean_f, 2),
                         np.round(z_mean_f, 1),
                         dr_mean,
                         dz_mean,
                         np.round((dr_mean + dfpid[r].mean()) / dfpid[r].mean(), 4),
                         np.round(dr_mean / dz_mean, 4),
-                        start_frame,
+                        start_frame[0],
+                        start_frame[1],
                         end_frames[0],
                         end_frames[1],
                         ])
 
     df_rz_means = pd.DataFrame(np.array(y_means),
                                columns=['id', x, y, r, z,
-                                        r + '_mean_i', z + '_mean_i',
+                                        # r + '_mean_i', z + '_mean_i',
                                         r + '_mean_f', z + '_mean_f',
                                         'dr_mean', 'dz_mean',
                                         'r_strain', 'drdz',
-                                        'start_frame', 'end_frame_i', 'end_frame_f',
+                                        'start_frame_i', 'start_frame_f',
+                                        'end_frame_i', 'end_frame_f',
                                         ])
     df_rz_means = df_rz_means.sort_values(by='dz_mean', ascending=True)
     df_rz_means.to_excel(join(path_results, 'net-dzr_per_pid.xlsx'), index=False)

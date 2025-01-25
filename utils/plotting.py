@@ -4,7 +4,13 @@
 from os.path import join
 import numpy as np
 from scipy.interpolate import griddata
+
+from tifffile import imread
+from skimage.transform import rescale
+
 import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Circle
 
 from utils.shapes import complete_erf_profile
 
@@ -15,35 +21,179 @@ from utils.shapes import complete_erf_profile
 # BELOW: PLOT EXPERIMENTAL DATA
 # ----------------------------------------------------------------------------------------------------------------------
 
+
+def plot_scatter_with_pid_labels(df, pxy, dict_settings, savepath):
+    px, py = pxy
+    x, y, id_ = df[px].to_numpy(), df[py].to_numpy(), df['id'].to_numpy()
+    mpp = dict_settings['microns_per_pixel']
+
+    # plot
+    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 5))
+
+    # plot 1: units = microns
+    ax1.scatter(x, y, c=id_, s=2)
+    for xi, yi, pid in zip(x, y, id_):
+        ax1.text(xi, yi, str(pid), color='black', fontsize=8)
+
+    # make circular patches for inner and outer radii
+    circle_edge = Circle(dict_settings['xyc_microns'], dict_settings['radius_microns'])
+    circle_hole = Circle(dict_settings['xyc_microns'], dict_settings['radius_hole_microns'])
+    patches = [circle_edge, circle_hole]
+    pc = PatchCollection(patches, fc='none', ec='k', lw=0.5, ls='--', alpha=0.5)
+    ax1.add_collection(pc)
+
+    ax1.set_xlim([0, dict_settings['field_of_view']])
+    ax1.set_xticks([0, dict_settings['field_of_view']])
+    ax1.set_xlabel(r'$x \: (\mu m)$')
+    ax1.set_ylim([0, dict_settings['field_of_view']])
+    ax1.set_yticks([0, dict_settings['field_of_view']])
+    ax1.set_ylabel(r'$y \: (\mu m)$')
+    ax1.invert_yaxis()
+    ax1.set_aspect('equal')
+
+    # plot 2: units = pixels
+    x, y = x / mpp, y / mpp
+    ax2.scatter(x, y, c=id_, s=2)
+    for xi, yi, pid in zip(x, y, id_):
+        ax2.text(xi, yi, str(pid), color='black', fontsize=8)
+
+    # make circular patches for inner and outer radii
+    circle_edge = Circle(dict_settings['xyc_pixels'], dict_settings['radius_pixels'])
+    circle_hole = Circle(dict_settings['xyc_pixels'], dict_settings['radius_hole_pixels'])
+    patches = [circle_edge, circle_hole]
+    pc = PatchCollection(patches, fc='none', ec='k', lw=0.5, ls='--', alpha=0.5)
+    ax2.add_collection(pc)
+
+    ax2.set_xlim([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_xticks([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_xlabel(r'$x \: (pix)$')
+    ax2.set_ylim([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_yticks([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_ylabel(r'$y \: (pix)$')
+    ax2.invert_yaxis()
+    ax2.set_aspect('equal')
+
+    plt.tight_layout()
+    if savepath is not None:
+            plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_scatter_on_image(df, pxy, dict_settings, savepath):
+    px, py = pxy
+    x, y, id_ = df[px].to_numpy(), df[py].to_numpy(), df['id'].to_numpy()
+    mpp = dict_settings['microns_per_pixel']
+
+    # image
+    img = imread(dict_settings['path_image_overlay'])
+    if len(img.shape) == 3:
+        img = np.mean(img, axis=0)
+
+    # plot
+    fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(10, 5))
+
+    # plot 1: units = microns
+    ax1.scatter(x, y, s=2, color='r')
+    ax1.imshow(rescale(img, mpp), cmap='gray', alpha=0.9)
+    # make circular patches for inner and outer radii
+    circle_edge = Circle(dict_settings['xyc_microns'], dict_settings['radius_microns'])
+    circle_hole = Circle(dict_settings['xyc_microns'], dict_settings['radius_hole_microns'])
+    patches = [circle_edge, circle_hole]
+    pc = PatchCollection(patches, fc='none', ec='yellow', lw=0.5, ls='--', alpha=0.5)
+    ax1.add_collection(pc)
+
+    ax1.set_xlim([0, dict_settings['field_of_view']])
+    ax1.set_xticks([0, dict_settings['field_of_view']])
+    ax1.set_xlabel(r'$x \: (\mu m)$')
+    ax1.set_ylim([0, dict_settings['field_of_view']])
+    ax1.set_yticks([0, dict_settings['field_of_view']])
+    ax1.set_ylabel(r'$y \: (\mu m)$')
+    ax1.invert_yaxis()
+    ax1.set_aspect('equal')
+
+    # plot 2: units = pixels
+    x, y = x / mpp, y / mpp
+    ax2.scatter(x, y, s=2, color='r')
+    ax2.imshow(img, cmap='gray', alpha=0.9)
+    # make circular patches for inner and outer radii
+    circle_edge = Circle(dict_settings['xyc_pixels'], dict_settings['radius_pixels'])
+    circle_hole = Circle(dict_settings['xyc_pixels'], dict_settings['radius_hole_pixels'])
+    patches = [circle_edge, circle_hole]
+    pc = PatchCollection(patches, fc='none', ec='yellow', lw=0.5, ls='--', alpha=0.5)
+    ax2.add_collection(pc)
+
+    ax2.set_xlim([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_xticks([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_xlabel(r'$x \: (pix)$')
+    ax2.set_ylim([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_yticks([0, dict_settings['field_of_view'] / mpp])
+    ax2.set_ylabel(r'$y \: (pix)$')
+    ax2.invert_yaxis()
+    ax2.set_aspect('equal')
+
+    plt.tight_layout()
+    if savepath is not None:
+        plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+
 def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param pid:
+    :param dzr_mean:
+    :param path_results:
+    :return:
+    """
     pdz, pdr = pdzdr
     dz_mean, dr_mean = dzr_mean
     px = 'frame'
+    pcm = 'cm'
     # -
     fig, (ax1, ax2) = plt.subplots(figsize=(6, 6), nrows=2, sharex=True,
                                    gridspec_kw={'height_ratios': [1.25, 1]})
 
     # plot dz by frames
-    ax1.plot(df[px], df[pdz], '-o', ms=1.5, lw=0.75, label=pid)
+    ax1.plot(df[px], df[pdz], '-o', ms=0.75, lw=0.5, label=pid)
     ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
     ax1.legend(title=r'$p_{ID}$')
-    ax1.grid(alpha=0.25)
-    ax1.set_title(r'$\Delta z_{net}=$' + ' {} '.format(dz_mean) + r'$\mu m$')
+    ax1.grid(alpha=0.125)
+    ax1.set_title(r'$p_{ID}$' + f' {pid}:  ' + r'$\Delta z_{net}=$' + ' {} '.format(dz_mean) + r'$\mu m$')
+
+    ax1r = ax1.twinx()
+    ax1r.plot(df[px], df[pcm], '-', lw=0.5, color='gray', alpha=0.5)
+    ax1r.set_ylabel(r'$c_{m}$', labelpad=-4, color='gray', alpha=0.75)
+    ax1r.set_ylim([0, 1])
+    ax1r.set_yticks([0, 1])
 
     # plot dr by frames
-    ax2.plot(df[px], df[pdr], '-o', ms=1.5, lw=0.75)
+    ax2.plot(df[px], df[pdr], '-o', ms=0.75, lw=0.5)
     ax2.set_xlabel('Frame')
     # ax2.set_xticks(np.arange(0, df[px].max() + 15, 25))
     ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
-    ax2.grid(alpha=0.25)
+    ax2.grid(alpha=0.125)
     ax2.set_title(r'$\Delta r_{net}=$' + ' {} '.format(dr_mean) + r'$\mu m$')
 
     plt.tight_layout()
-    plt.savefig(join(path_results, 'pid{}.png'.format(pid)), dpi=300, facecolor='w')
+    plt.savefig(join(path_results, 'pid{}.png'.format(pid)), dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
 
 
 def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param pid:
+    :param path_results:
+    :return:
+    """
     # hard-coded
     px1, px2, py2 = 't_sync', 'SOURCE_TIME_MIDPOINT', 'VOLT'
     # inputs
@@ -73,6 +223,15 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
 
 
 def plot_pids_dz_by_voltage_ascending(df, pdzdr, dict_test, pid, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param dict_test:
+    :param pid:
+    :param path_results:
+    :return:
+    """
     # hard-coded
     px1 = 'VOLT'
     # inputs
@@ -105,6 +264,15 @@ def plot_pids_dz_by_voltage_ascending(df, pdzdr, dict_test, pid, path_results):
 
 
 def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param dict_test:
+    :param pid:
+    :param path_results:
+    :return:
+    """
     # hard-coded
     px1 = 'VOLT'
     # inputs
@@ -143,8 +311,9 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
 
 
 def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
-                    levels=15, units=None, title=None):
+                    levels=15, units=None, title=None, overlay_circles=False, dict_settings=None):
     """
+    To-Do: add concentric circles around r = 0 to show radial coordinates
 
     :param df:
     :param pxyz:
@@ -153,6 +322,9 @@ def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
     :param interpolate:
     :param levels:
     :param units: two-tuple (x-y units, z units), like: ('pixels', r'$\Delta z \: (\mu m)$')
+    :param title:
+    :param overlay_circles:
+    :param dict_settings:
     :return:
     """
 
@@ -176,11 +348,25 @@ def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
     # plot
     fig, ax = plt.subplots()
 
-    ax.contour(xi, yi, zi, levels=levels, linewidths=0.5, colors='k')
+    # contour
+    # ax.contour(xi, yi, zi, levels=levels, linewidths=0.5, colors='k')
     cntr1 = ax.contourf(xi, yi, zi, levels=levels, cmap="RdBu_r")
-
     fig.colorbar(cntr1, ax=ax, label=units[2])
+
+    # scatter
     ax.plot(x, y, 'ko', ms=3)
+
+    # overlay circles to show diameter of features
+    if overlay_circles:
+        # make circular patches for inner and outer radii
+        circle_edge = Circle(dict_settings['xyc_microns'], dict_settings['radius_microns'])
+        patches = [circle_edge]
+        if 'radius_hole_microns' in dict_settings.keys():
+            circle_hole = Circle(dict_settings['xyc_microns'], dict_settings['radius_hole_microns'])
+            patches.append(circle_hole)
+        pc = PatchCollection(patches, fc='none', ec='k', lw=0.5, ls='--', alpha=0.5)
+        ax.add_collection(pc)
+
     ax.set(xlim=(field[0], field[1]), xticks=(field[0], field[1]),
            ylim=(field[0], field[1]), yticks=(field[0], field[1]),
            )
@@ -191,11 +377,14 @@ def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
     if title is not None:
         ax.set_title(title)
 
+    ax.set_aspect('equal')
+    plt.tight_layout()
     if savepath is not None:
-        plt.savefig(savepath, dpi=300, facecolor='white')
+            plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
     else:
         plt.show()
     plt.close()
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------

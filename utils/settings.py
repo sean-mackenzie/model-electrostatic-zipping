@@ -7,6 +7,8 @@ import smu
 def get_dict_dtypes(name):
     if name == 'settings':
         dict_dtypes = {
+            'feature_label': str,
+            'fid': int,
             'exposure_time': float,
             'frame_rate': float,
             'microns_per_pixel': float,
@@ -21,14 +23,19 @@ def get_dict_dtypes(name):
             'xyc_pixels': tuple,
             'xyc_microns': tuple,
             'radius_pixels': float,
+            'radius_hole_pixels': float,
             'radius_microns': float,
+            'radius_hole_microns': float,
             'andor_keithley_delay': float,
+            'path_process_profiles': str,
+            'path_image_overlay': str,
+            'membrane_thickness': float,
         }
     elif name == 'test':
         dict_dtypes = {
             'tid': int,
             'filename': str,
-            'dpt_start_frame': int,
+            'dpt_start_frame': tuple,
             'dpt_end_frames': tuple,
             'smu_test_type': int,
             'smu_source_delay_time': float,
@@ -52,16 +59,23 @@ def read_settings_to_dict(filepath, name):
     dict_settings = {}
     if name == 'settings':
         for k, v in zip(ks, vs):
-                if k in ['image_size', 'padding']:
+                if k in ['fid', 'image_size', 'padding']:
                     dict_settings.update({k: int(v)})
                 elif k in ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']:
                     dict_settings.update({k: eval(v)})
+                elif k in ['feature_label', 'path_process_profiles', 'path_image_overlay']:
+                    dict_settings.update({k: str(v)})
                 else:
                     dict_settings.update({k: float(v)})
         dict_settings = check_dependent_settings(dict_settings, name, filepath)
     elif name == 'test':
         for k, v in zip(ks, vs):
-            if k in ['tid', 'dpt_start_frame', 'smu_test_type', 'smu_vmax', 'smu_step_max']:
+            if k == 'dpt_start_frame':
+                if isinstance(v, int):
+                    dict_settings.update({k: (0, int(v))})
+                else:
+                    dict_settings.update({k: eval(v)})
+            elif k in ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max']:
                 dict_settings.update({k: int(v)})
             elif k in ['filename']:
                 dict_settings.update({k: str(v)})
@@ -75,7 +89,8 @@ def read_settings_to_dict(filepath, name):
 def check_dependent_settings(dict_settings, name, filepath):
     update_settings = False
     if name == 'settings':
-        for k2, k1 in zip(['field_of_view', 'radius_microns'], ['image_size', 'radius_pixels']):
+        for k2, k1 in zip(['field_of_view', 'radius_microns', 'radius_hole_microns'],
+                          ['image_size', 'radius_pixels', 'radius_hole_pixels']):
             if k2 not in dict_settings.keys():
                 dict_settings.update({
                     k2: dict_settings[k1] * dict_settings['microns_per_pixel']
@@ -107,6 +122,16 @@ def get_settings(fp_settings, name):
 
 
 def make_test_settings(filename, start_frame, end_frames, dict_settings):
+    """
+
+    :param filename:
+    :param start_frame:
+    :param end_frames:
+    :param dict_settings:
+    :return:
+    """
+    if isinstance(start_frame, int):
+        start_frame = (0, start_frame)
     # parse I-V filename to get Keithley voltage waveform details
     tid, test_type, vmax, dv, step_max = smu.parse_voltage_waveform_from_filename(filename=filename)
     # -

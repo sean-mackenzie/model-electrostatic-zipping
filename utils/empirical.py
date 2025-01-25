@@ -55,3 +55,36 @@ def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck=None):
     }
 
     return dict_fid
+
+# --- SURFACE PROFILES
+
+def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=None):
+    if fid_override is not None:
+        fid = fid_override
+    else:
+        fid = dict_settings['fid']
+    # read surface profile
+    df = pd.read_excel(dict_settings['path_process_profiles'])
+    # get feature profile
+    df = df[(df['fid'] == fid) & (df['step'] == df['step'].max())]
+    # keep only necessary columns
+    df = df[['x', 'z', 'r']]
+    # filter out profile where through-hole has been etched
+    if hole:
+        df = df[df['r'].abs() > dict_settings['radius_hole_microns']]
+
+    # return a subset of the profile
+    if subset is None:
+        # return the full-width profile
+        pass
+    elif subset == 'abs':
+        df['r'] = df['r'].abs()
+    elif subset == 'right_half':
+        df = df[df['r'] > 0]
+    elif subset == 'left_half':
+        df = df[df['r'] < 0]
+        df['r'] = df['r'].abs()
+    else:
+        raise ValueError("Options are: [None, abs, right_half, left_half]")
+
+    return df

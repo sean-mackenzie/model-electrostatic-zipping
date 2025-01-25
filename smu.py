@@ -49,3 +49,11 @@ def pre_process_keithley(df, delay, integration, latency=100e-6):
     df = df.round({'TIME': 3})
 
     return df
+
+def average_voltage_by_source_time(df):
+    """
+
+    :param df:
+    :return:
+    """
+    return df.groupby('STEP').mean().reset_index().round({'TIME': 4})
