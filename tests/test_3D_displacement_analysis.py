@@ -3,7 +3,7 @@ from os.path import join
 import pandas as pd
 
 import smu, dpt
-from utils import settings, analyses, plotting
+from utils import settings, analyses, plotting, empirical
 
 
 if __name__ == "__main__":
@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
     TEST_CONFIG = '01092025_W10-A1_C9-0pT'
-    TID = 1
+    TID = 5
 
     """
     NOTES:
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     PRE_PROCESS_COORDS = False  # True False
     PRE_PROCESS_IV = False
     MERGE_COORDS_AND_VOLTAGE = False
-    VERIFY_SETTINGS = False
+    VERIFY_SETTINGS = False  # only need to run once per test configuration
     # -
     # ANALYSES
     SECOND_PASS_XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization method
@@ -198,17 +198,25 @@ if __name__ == "__main__":
     Verify settings 
     """
     if VERIFY_SETTINGS:
-        plotting.plot_scatter_with_pid_labels(df=DF[DF['frame'] == 1],
-                                              pxy=('xg', 'yg'),
-                                              dict_settings=DICT_SETTINGS,
-                                              savepath=join(SAVE_SETTINGS, 'pid-labels_on_features.png'),
-                                              )
+        plotting.plot_surface_profilometry(
+            dict_settings=DICT_SETTINGS,
+            savepath=join(SAVE_SETTINGS, 'surface_profile.png'),
+        )
 
-        plotting.plot_scatter_on_image(df=DF[DF['frame'] == 1],
-                                       pxy=('xg', 'yg'),
-                                       dict_settings=DICT_SETTINGS,
-                                       savepath=join(SAVE_SETTINGS, 'pids-features_on_image.png'),
-                                       )
+
+        plotting.plot_scatter_with_pid_labels(
+            df=DF[DF['frame'] == 1],
+            pxy=('xg', 'yg'),
+            dict_settings=DICT_SETTINGS,
+            savepath=join(SAVE_SETTINGS, 'pid-labels_on_features.png'),
+        )
+
+        plotting.plot_scatter_on_image(
+            df=DF[DF['frame'] == 1],
+            pxy=('xg', 'yg'),
+            dict_settings=DICT_SETTINGS,
+            savepath=join(SAVE_SETTINGS, 'pids-features_on_image.png'),
+        )
 
     # ------------------------------------------------------------------------------------------------------------------
     # ---

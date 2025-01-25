@@ -30,8 +30,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # -
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
     # for contourf plots
-    levels_z = 10
-    levels_r = 5
+    levels_z = 15
+    levels_r = 10
     # -
     if xym == 'm':
         plot_pids_by_synchronous_time_voltage = False
@@ -65,7 +65,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     path_results_2D_z_by_frame = join(path_results_rep, '2D_z_by_frame')
     path_results_2D_dz_by_frame = join(path_results_rep, '2D_dz_by_frame')
     path_results_2D_dr_by_frame = join(path_results_rep, '2D_dr_by_frame')
-    path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dz-r_by_frame_w-surface')
+    # path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dz-r_by_frame_w-surface')
+    path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dzdr-r_by_frame_w-surf+drX+raytracing')
     # make directories
     pths = [path_results_rep,
             path_results_pids_by_frame, path_results_pids_by_synchronous_time_voltage,
@@ -268,29 +269,56 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         zmin, zmax = df[pz].min(), df[pz].max()
         dzmin, dzmax = df[pdz].min(), df[pdz].max()
         drmin, drmax = df[pdr].min(), df[pdr].max()
+        # -
+        # make "amplified radial displacement" column
+        # and set color scale
+        df['r_dr'] = df[pr] + df[pdr] * 10
+        vmin, vmax = df[pdr].min(), df[pdr].max()
         # ---
-        for frame in np.arange(310, 401): #np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):  # np.arange(300, 451): #
+        frames = np.arange(60, 71)  # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):
+        for frame in frames:
             df_frame = df[df['frame'] == frame].sort_values(pr)
             # -
             if plot_1D_dz_by_r_by_frame_with_surface_profile:
                 x = df_frame[pr].to_numpy()
                 y = df_frame[pdz].to_numpy()
-                xnew, ynew, x, y = fit.wrapper_fit_radial_membrane_profile(x=x, y=y, s=3000,
+                xnew, ynew, xf, yf = fit.wrapper_fit_radial_membrane_profile(x=x, y=y, s=3000,
                     dict_settings=dict_settings, faux_r_zero=True, faux_r_edge=False,
                 )
 
+                x = df_frame['r_dr'].to_numpy()
+
                 fig, ax = plt.subplots(figsize=(5, 2.75))
-                ax.plot(surfr, surfz, '-', color='gray', lw=0.5, label='SP')
-                ax.plot(x, y, 'o', color='tab:blue', ms=1.5, label='FPs')
-                ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit')
+
+                # ---
+                # ---
+                if frame > frames[1]:
+                    df_last = df[df['frame'] == frame - 1]
+                    df_two = pd.concat([df_last, df_frame])
+                    df_two = df_two.sort_values('frame')
+                    for pid in df_two['id'].unique():
+                        dfpid = df_two[df_two['id'] == pid]
+                        ax.plot(dfpid['r_dr'], dfpid[pdz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
+                    if frame > frames[2]:
+                        df_last2 = df[df['frame'] == frame - 2]
+                        df_three = pd.concat([df_two, df_last2])
+                        df_three = df_three.sort_values('frame')
+                        for pid in df_three['id'].unique():
+                            dfpid = df_three[df_three['id'] == pid]
+                            ax.plot(dfpid['r_dr'], dfpid[pdz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
+                # ---
+
+                ax.plot(surfr, surfz, '-', color='gray', lw=0.5, label='SP', zorder=3.1)
+                ax.scatter(x, y, c=df_frame[pdr], s=5, cmap='coolwarm', vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
+                ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit', zorder=3.2)
                 ax.set_xlabel(r'$r \: (\mu m)$')
                 ax.set_xlim(rmin, rmax + 5)
                 ax.set_ylabel(r'$\Delta z \: (\mu m)$')
                 ax.set_ylim(dzmin - 2.5, dzmax + 2.5)
-                ax.grid(alpha=0.25)
+                ax.grid(alpha=0.0625)
                 ax.set_title('frame: {:03d}'.format(frame))
                 plt.tight_layout()
-                plt.savefig(join(path_results_1D_dz_by_r_by_frame_w_surf, 'dz-r_by_fr{:03d}.png'.format(frame)),
+                plt.savefig(join(path_results_1D_dz_by_r_by_frame_w_surf, 'dz-r_by_fr{:03d}_+dr10X.png'.format(frame)),
                             dpi=300, facecolor='w')
                 plt.close()
             # ---

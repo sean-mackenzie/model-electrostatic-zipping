@@ -75,8 +75,9 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
 
     # return a subset of the profile
     if subset is None:
-        # return the full-width profile
-        pass
+        pass  # return the full-width profile
+    elif subset == 'full':
+        pass  # alternate method to return the full-width profile
     elif subset == 'abs':
         df['r'] = df['r'].abs()
     elif subset == 'right_half':
@@ -85,6 +86,6 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
         df = df[df['r'] < 0]
         df['r'] = df['r'].abs()
     else:
-        raise ValueError("Options are: [None, abs, right_half, left_half]")
+        raise ValueError("Options are: [None or full, abs, right_half, left_half]")
 
     return df

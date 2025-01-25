@@ -13,12 +13,13 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 
 from utils.shapes import complete_erf_profile
+from utils.empirical import read_surface_profile
 
 
 # -
 
 # ----------------------------------------------------------------------------------------------------------------------
-# BELOW: PLOT EXPERIMENTAL DATA
+# BELOW: PLOT SETTINGS VERIFICATION
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -75,7 +76,7 @@ def plot_scatter_with_pid_labels(df, pxy, dict_settings, savepath):
 
     plt.tight_layout()
     if savepath is not None:
-            plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
+        plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
     else:
         plt.show()
     plt.close()
@@ -140,6 +141,40 @@ def plot_scatter_on_image(df, pxy, dict_settings, savepath):
         plt.show()
     plt.close()
 
+
+def plot_surface_profilometry(dict_settings, savepath):
+    sr, sz = 'r', 'z'
+    fid = dict_settings['fid']
+    df1 = read_surface_profile(dict_settings, subset='full', hole=False, fid_override=None)
+    df2 = read_surface_profile(dict_settings, subset='full', hole=True, fid_override=None)
+    # -
+    # original depth
+    dz1 = np.round(df1[sz].max() - df1[sz].min(), 1)
+    # surface-to-hole depth
+    dz2 = np.round(df2[sz].max() - df2[sz].min(), 1)
+    # -
+    # plot
+    fig, ax = plt.subplots(figsize=(5, 2.75))
+
+    ax.plot(df1[sr], df1[sz], '-', color='r', lw=1, label='Before Via Etch')
+    ax.plot(df2[sr], df2[sz], 'o', color='k', ms=1, label='Estimated Profile')
+    ax.plot(df2[sr], df2[sz], '--', color='k', lw=0.5, alpha=0.25)
+
+    ax.set_xlabel(r'$r \: (\mu m)$')
+    ax.set_ylabel(r'$z \: (\mu m)$')
+    ax.legend()
+    ax.grid(alpha=0.25)
+    ax.set_title('fid{}: '.format(fid) + r'$\Delta z, \Delta z_{Hole}=$' +
+                 ' ({}, {}) '.format(dz1, dz2) + r'$\mu m$')
+    plt.tight_layout()
+    plt.savefig(savepath, dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# BELOW: PLOT EXPERIMENTAL DATA
+# ----------------------------------------------------------------------------------------------------------------------
 
 def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_results):
     """
