@@ -3,6 +3,30 @@ from os.path import join
 import pandas as pd
 import smu
 
+def get_fid(feature_label):
+    if feature_label.startswith('a'):
+        fid = 0
+    elif feature_label.startswith('b'):
+        fid = 3
+    elif feature_label.startswith('c'):
+        fid = 6
+    elif feature_label.startswith('d'):
+        fid = 9
+    elif feature_label.startswith('e'):
+        fid = 12
+    elif feature_label.startswith('f'):
+        fid = 15
+    else:
+        raise ValueError()
+    if feature_label.endswith('1'):
+        pass
+    elif feature_label.endswith('2'):
+        fid += 1
+    elif feature_label.endswith('3'):
+        fid += 2
+    else:
+        raise ValueError()
+    return fid
 
 def get_dict_dtypes(name):
     if name == 'settings':
@@ -28,6 +52,8 @@ def get_dict_dtypes(name):
             'radius_hole_microns': float,
             'andor_keithley_delay': float,
             'path_process_profiles': str,
+            'fid_process_profile': int,
+            'step_process_profile': int,
             'path_image_overlay': str,
             'membrane_thickness': float,
         }
@@ -48,7 +74,7 @@ def get_dict_dtypes(name):
     return dict_dtypes
 
 
-def read_settings_to_dict(filepath, name):
+def read_settings_to_dict(filepath, name, update_dependent=False):
     if name not in ['settings', 'test']:
         raise ValueError('Name not in: [settings, test]')
 
@@ -59,7 +85,7 @@ def read_settings_to_dict(filepath, name):
     dict_settings = {}
     if name == 'settings':
         for k, v in zip(ks, vs):
-                if k in ['fid', 'image_size', 'padding']:
+                if k in ['fid', 'image_size', 'padding', 'fid_process_profile', 'step_process_profile']:
                     dict_settings.update({k: int(v)})
                 elif k in ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']:
                     dict_settings.update({k: eval(v)})
@@ -67,6 +93,11 @@ def read_settings_to_dict(filepath, name):
                     dict_settings.update({k: str(v)})
                 else:
                     dict_settings.update({k: float(v)})
+        if update_dependent:
+            dependent_settings = ['field_of_view', 'radius_microns', 'radius_hole_microns',
+                                  'xyc_microns', 'integration_time', 'fid']
+            for k in dependent_settings:
+                _ = dict_settings.pop(k, None)
         dict_settings = check_dependent_settings(dict_settings, name, filepath)
     elif name == 'test':
         for k, v in zip(ks, vs):
@@ -85,6 +116,7 @@ def read_settings_to_dict(filepath, name):
                 dict_settings.update({k: float(v)})
 
     return dict_settings
+
 
 def check_dependent_settings(dict_settings, name, filepath):
     update_settings = False
@@ -107,6 +139,12 @@ def check_dependent_settings(dict_settings, name, filepath):
                 'integration_time': dict_settings['nplc'] / 60,
             })
             update_settings = True
+        if 'fid' not in dict_settings.keys():
+            dict_settings.update({
+                'fid': get_fid(feature_label=dict_settings['feature_label']),
+            })
+            update_settings = True
+
     if update_settings:
         write_settings_to_df(s=dict_settings, filepath_save=filepath)
     return dict_settings
@@ -117,8 +155,8 @@ def write_settings_to_df(s, filepath_save):
     df.to_excel(filepath_save, index=True, index_label='k')
 
 
-def get_settings(fp_settings, name):
-    return read_settings_to_dict(filepath=fp_settings, name=name)
+def get_settings(fp_settings, name, update_dependent=False):
+    return read_settings_to_dict(filepath=fp_settings, name=name, update_dependent=update_dependent)
 
 
 def make_test_settings(filename, start_frame, end_frames, dict_settings):
@@ -133,7 +171,10 @@ def make_test_settings(filename, start_frame, end_frames, dict_settings):
     if isinstance(start_frame, int):
         start_frame = (0, start_frame)
     # parse I-V filename to get Keithley voltage waveform details
-    tid, test_type, vmax, dv, step_max = smu.parse_voltage_waveform_from_filename(filename=filename)
+    if filename is not None:
+        tid, test_type, vmax, dv, step_max = smu.parse_voltage_waveform_from_filename(filename=filename)
+    else:
+        tid, test_type, vmax, dv, step_max = 14, 1, 0, 0, 0
     # -
     dict_test = {
         'tid': tid,

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def pre_process_coords(df, settings, test):
+def pre_process_coords(df, settings):
     # system settings
     # 3D particle tracking
     scale_z = settings['scale_z']
@@ -16,8 +16,6 @@ def pre_process_coords(df, settings, test):
     microns_per_pixel = settings['microns_per_pixel']
     frame_rate = settings['frame_rate']
     andor_keithley_delay = settings['andor_keithley_delay']
-    # test-specific params
-    start_frame = test['dpt_start_frame']
 
     # Format the coords
     keep_cols = ['frame', 'id', 'cm', 'xm', 'ym', 'xg', 'yg', 'z']
@@ -48,13 +46,17 @@ def pre_process_coords(df, settings, test):
         # relative to r = 0 (i.e., center of diaphragm)
         df[r + '_pix'] = np.sqrt((df[x + '_pix'] - xc_pixels) ** 2 + (df[y + '_pix'] - yc_pixels) ** 2)
         df[r] = np.sqrt((df[x] - xc) ** 2 + (df[y] - yc) ** 2)
+    # -
+    return df
 
+def calculate_relative_coords(df, test_settings, df0=None):
     # Define relative positions (i.e., displacement)
     # relative to: t < t_start
     # time
     df['dt'] = df['t_raw']
     # space
-    df0 = df[(df['frame'] > start_frame[0]) & (df['frame'] < start_frame[1])].groupby('id').mean()
+    if df0 is None:
+        df0 = calculate_initial_coords(df, test_settings)
     dfpids = []
     for pid in df['id'].unique():
         dfpid = df[df['id'] == pid]
@@ -66,6 +68,11 @@ def pre_process_coords(df, settings, test):
     df = df.reset_index(drop=True)
     return df
 
+def calculate_initial_coords(df, test_settings):
+    # test-specific params
+    start_frame = test_settings['dpt_start_frame']
+    df0 = df[(df['frame'] > start_frame[0]) & (df['frame'] < start_frame[1])].groupby('id').mean()
+    return df0
 
 def merge_with_iv(df, dfv):
     """

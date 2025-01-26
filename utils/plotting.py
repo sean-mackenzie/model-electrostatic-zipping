@@ -144,9 +144,13 @@ def plot_scatter_on_image(df, pxy, dict_settings, savepath):
 
 def plot_surface_profilometry(dict_settings, savepath):
     sr, sz = 'r', 'z'
-    fid = dict_settings['fid']
-    df1 = read_surface_profile(dict_settings, subset='full', hole=False, fid_override=None)
-    df2 = read_surface_profile(dict_settings, subset='full', hole=True, fid_override=None)
+    if 'fid_process_profile' in dict_settings.keys():
+        fid = dict_settings['fid_process_profile']
+    else:
+        fid = dict_settings['fid']
+
+    df1 = read_surface_profile(dict_settings, subset='full', hole=False, fid_override=fid)
+    df2 = read_surface_profile(dict_settings, subset='full', hole=True, fid_override=fid)
     # -
     # original depth
     dz1 = np.round(df1[sz].max() - df1[sz].min(), 1)
@@ -210,7 +214,7 @@ def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_resul
     # plot dr by frames
     ax2.plot(df[px], df[pdr], '-o', ms=0.75, lw=0.5)
     ax2.set_xlabel('Frame')
-    # ax2.set_xticks(np.arange(0, df[px].max() + 15, 25))
+    # ax2.set_xticks(np.arange(0, df[px].max() + 15, 20))
     ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
     ax2.grid(alpha=0.125)
     ax2.set_title(r'$\Delta r_{net}=$' + ' {} '.format(dr_mean) + r'$\mu m$')
@@ -243,7 +247,7 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     ax1.grid(alpha=0.25)
     # plot V(t)
     ax1r = ax1.twinx()
-    ax1r.plot(df[px2], df[py2], '-', color='gray', lw=0.75, alpha=0.5)
+    ax1r.plot(df[px1], df[py2], '-', color='gray', lw=0.75, alpha=0.5)
     ax1r.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5)
     # plot r/dr by frames
     ax2.plot(df[px1], df[pdr], '-o', ms=1.5, lw=0.75)

@@ -59,14 +59,20 @@ def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck=None):
 # --- SURFACE PROFILES
 
 def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=None):
+    # read surface profile
+    df = pd.read_excel(dict_settings['path_process_profiles'])
+    # -
+    # get feature profile
     if fid_override is not None:
         fid = fid_override
     else:
         fid = dict_settings['fid']
-    # read surface profile
-    df = pd.read_excel(dict_settings['path_process_profiles'])
-    # get feature profile
-    df = df[(df['fid'] == fid) & (df['step'] == df['step'].max())]
+    if 'step_process_profile' in dict_settings.keys():
+        step = dict_settings['step_process_profile']
+    else:
+        step = df['step'].max()
+    df = df[(df['fid'] == fid) & (df['step'] == step)]
+    # -
     # keep only necessary columns
     df = df[['x', 'z', 'r']]
     # filter out profile where through-hole has been etched

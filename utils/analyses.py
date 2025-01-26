@@ -14,10 +14,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     px, py, pr, pdx, pdy, pdr = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr']]
     pz, pdz = 'z', 'dz'
     # -
-    # modifiers
+    # modifiers (True, False)
     eval_pids_drz = False  # True: calculate/export net-displacement per-particle in r- and z-directions
     plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
-    plot_pids_by_frame = False  # If you have voltage data, False
+    plot_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
     plot_pids_by_synchronous_time_voltage = False
     plot_pids_dz_by_voltage_ascending = False  # Should probably always be False
     plot_pids_dz_by_voltage_hysteresis = False
@@ -29,6 +29,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     plot_2D_dr_by_frame = False
     # -
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    dr_ampl = 5
+    include_spline_fit_membrane = False
     # for contourf plots
     levels_z = 15
     levels_r = 10
@@ -270,28 +272,37 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         dzmin, dzmax = df[pdz].min(), df[pdz].max()
         drmin, drmax = df[pdr].min(), df[pdr].max()
         # -
+        x_lim = rmin, surfr.max()
+        y_lim = np.min([dzmin, surfz.min()]) - 5, surfz.max() + 5
+        # -
         # make "amplified radial displacement" column
         # and set color scale
-        df['r_dr'] = df[pr] + df[pdr] * 10
+        df['r_dr'] = df[pr] + df[pdr] * dr_ampl
         vmin, vmax = df[pdr].min(), df[pdr].max()
         # ---
-        frames = np.arange(60, 71)  # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):
+        frames = np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
         for frame in frames:
             df_frame = df[df['frame'] == frame].sort_values(pr)
             # -
             if plot_1D_dz_by_r_by_frame_with_surface_profile:
-                x = df_frame[pr].to_numpy()
-                y = df_frame[pdz].to_numpy()
-                xnew, ynew, xf, yf = fit.wrapper_fit_radial_membrane_profile(x=x, y=y, s=3000,
-                    dict_settings=dict_settings, faux_r_zero=True, faux_r_edge=False,
-                )
-
+                # data to plot particles
                 x = df_frame['r_dr'].to_numpy()
-
+                y = df_frame[pdz].to_numpy()
+                # ---
+                # plot
                 fig, ax = plt.subplots(figsize=(5, 2.75))
-
-                # ---
-                # ---
+                # -
+                # fit spline
+                # data to fit spline to
+                if include_spline_fit_membrane:
+                    xf = df_frame[pr].to_numpy()
+                    xnew, ynew, xf, yf = fit.wrapper_fit_radial_membrane_profile(x=xf, y=y, s=3000,
+                        dict_settings=dict_settings, faux_r_zero=True, faux_r_edge=True,
+                    )
+                    # ax.scatter(xf, yf, s=2, color='k', alpha=0.25)  # show faux particles used for fitting
+                    ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit', zorder=3.2)
+                # -
+                # ray tracing
                 if frame > frames[1]:
                     df_last = df[df['frame'] == frame - 1]
                     df_two = pd.concat([df_last, df_frame])
@@ -306,19 +317,19 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                         for pid in df_three['id'].unique():
                             dfpid = df_three[df_three['id'] == pid]
                             ax.plot(dfpid['r_dr'], dfpid[pdz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
-                # ---
-
+                # -
                 ax.plot(surfr, surfz, '-', color='gray', lw=0.5, label='SP', zorder=3.1)
                 ax.scatter(x, y, c=df_frame[pdr], s=5, cmap='coolwarm', vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
-                ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit', zorder=3.2)
                 ax.set_xlabel(r'$r \: (\mu m)$')
-                ax.set_xlim(rmin, rmax + 5)
+                ax.set_xlim(x_lim)
                 ax.set_ylabel(r'$\Delta z \: (\mu m)$')
-                ax.set_ylim(dzmin - 2.5, dzmax + 2.5)
+                ax.set_ylim(y_lim)
                 ax.grid(alpha=0.0625)
                 ax.set_title('frame: {:03d}'.format(frame))
                 plt.tight_layout()
-                plt.savefig(join(path_results_1D_dz_by_r_by_frame_w_surf, 'dz-r_by_fr{:03d}_+dr10X.png'.format(frame)),
-                            dpi=300, facecolor='w')
+                plt.savefig(
+                    join(path_results_1D_dz_by_r_by_frame_w_surf,
+                         'dz-r_by_fr{:03d}_+dr{}X.png'.format(frame, dr_ampl)),
+                    dpi=300, facecolor='w')
                 plt.close()
             # ---

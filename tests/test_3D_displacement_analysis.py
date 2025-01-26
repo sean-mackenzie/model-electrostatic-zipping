@@ -14,8 +14,8 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
-    TID = 5
+    TEST_CONFIG = '01102025_W13-D1_C9-0pT'
+    TID = 1
 
     """
     NOTES:
@@ -47,13 +47,15 @@ if __name__ == "__main__":
                     * But here is what may be really, really interesting:
                         ** Knowing the exact position of the zipping interface, we can evaluate SLIPPAGE ALONG THE SIDEWALL! 
     """
-
     # -
-    # PRE-PROCESSING
-    PRE_PROCESS_COORDS = False  # True False
-    PRE_PROCESS_IV = False
-    MERGE_COORDS_AND_VOLTAGE = False
+    # SETTINGS
     VERIFY_SETTINGS = False  # only need to run once per test configuration
+    UPDATE_DEPENDENT = False  # True: update all dependent settings in dict_settings.xlsx
+    # -
+    # PRE-PROCESSING (True False)
+    PRE_PROCESS_COORDS = False  # If you change andor_keithley_delay time, you must pre-process coords.
+    PRE_PROCESS_IV = False  # Only needs to be run once; not dependent on synchronization timing settings.
+    MERGE_COORDS_AND_VOLTAGE = False
     # -
     # ANALYSES
     SECOND_PASS_XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization method
@@ -61,22 +63,15 @@ if __name__ == "__main__":
     # ---
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
-    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # only used if test_settings.xlsx is not found
-    """
-    tid     start_frame, (end_frames)
-    1       10, (170, 220)
-    2       20, (120, 125)
-    3       10, (240, 250)
-    4       50, (120, 125)
-    5       5, (90, 110)
-    6       (90, 100), (235, 245)
-    """
-
+    START_FRAME, END_FRAMES = (0, 8), (195, 205)  # only used if test_settings.xlsx is not found
+    # -
+    # ALTERNATE INITIAL COORDS
+    EXPORT_INITIAL_COORDS = False
+    USE_INITIAL_COORDS, USE_TID = False, 1
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
     # ------------------------------------------------------------------------------------------------------------------
-
     # ---
     # FILEPATHS
     # ---
@@ -96,6 +91,8 @@ if __name__ == "__main__":
     READ_COORDS_DIR = join(BASE_DIR, 'results', 'test-idpt_test-{}'.format(TID))
     FN_COORDS_STARTS_WITH = 'test_coords_t'
     FN_COORDS_SAVE = 'tid{}_coords.xlsx'.format(TID)
+    FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)
+    FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(USE_TID)
     # -
     # Keithley
     READ_IV_DIR = join(BASE_DIR, 'I-V')
@@ -110,21 +107,28 @@ if __name__ == "__main__":
     for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS]:
         if not os.path.exists(pth):
             os.makedirs(pth)
-
+    # -
+    # Pre-run checks
+    if USE_INITIAL_COORDS is True and not os.path.exists(join(SAVE_COORDS, FN_COORDS_INITIAL_READ)):
+        raise ValueError("Initial coords for tid {} do not exist.".format(USE_TID))
+    # -
     # ------------------------------------------------------------------------------------------------------------------
     # ---
     # SETTINGS
     # ---
     # setup-specific
     # (i.e., for each set of calibration images)
-    DICT_SETTINGS = settings.get_settings(fp_settings=FP_SETTINGS, name='settings')
+    DICT_SETTINGS = settings.get_settings(fp_settings=FP_SETTINGS, name='settings', update_dependent=UPDATE_DEPENDENT)
     # -
     # test-specific
     # (i.e., for each set of test images)
     if os.path.exists(FP_TEST_SETTINGS):
         DICT_TEST = settings.get_settings(fp_settings=FP_TEST_SETTINGS, name='test')
     else:
-        FN_IV = [x for x in os.listdir(READ_IV_DIR) if x.startswith(FN_IV_STARTS_WITH)][0]
+        if PRE_PROCESS_IV:
+            FN_IV = [x for x in os.listdir(READ_IV_DIR) if x.startswith(FN_IV_STARTS_WITH) and x.endswith('.xlsx')][0]
+        else:
+            FN_IV = None
         DICT_TEST = settings.make_test_settings(
             filename=FN_IV,
             start_frame=START_FRAME,
@@ -145,7 +149,15 @@ if __name__ == "__main__":
             FN_COORDS = [x for x in os.listdir(READ_COORDS_DIR) if x.startswith(FN_COORDS_STARTS_WITH)][0]
             DF = pd.read_excel(join(READ_COORDS_DIR, FN_COORDS))
             # pre-process
-            DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS, test=DICT_TEST)
+            DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS)
+            # calculate "initial coords", so that "relative coords" can be determined
+            DF0 = dpt.calculate_initial_coords(df=DF, test_settings=DICT_TEST)
+            if EXPORT_INITIAL_COORDS:
+                DF0.to_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_SAVE), index=True)
+                raise ValueError("Always stop always exporting initial coords.")
+            if USE_INITIAL_COORDS:
+                DF0 = pd.read_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_READ))
+            DF = dpt.calculate_relative_coords(df=DF, test_settings=DICT_TEST, df0=DF0)
             # export transformed dataframe
             # for reference: physical + pixel coordinates
             # DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=True)
@@ -205,14 +217,14 @@ if __name__ == "__main__":
 
 
         plotting.plot_scatter_with_pid_labels(
-            df=DF[DF['frame'] == 1],
+            df=DF[DF['frame'] == DF['frame'].iloc[0]],
             pxy=('xg', 'yg'),
             dict_settings=DICT_SETTINGS,
             savepath=join(SAVE_SETTINGS, 'pid-labels_on_features.png'),
         )
 
         plotting.plot_scatter_on_image(
-            df=DF[DF['frame'] == 1],
+            df=DF[DF['frame'] == DF['frame'].iloc[0]],
             pxy=('xg', 'yg'),
             dict_settings=DICT_SETTINGS,
             savepath=join(SAVE_SETTINGS, 'pids-features_on_image.png'),
