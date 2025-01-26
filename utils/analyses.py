@@ -29,7 +29,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     plot_2D_dr_by_frame = False
     # -
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
-    dr_ampl = 5
+    dr_ampl = 10
     include_spline_fit_membrane = False
     # for contourf plots
     levels_z = 15
@@ -261,6 +261,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
     # --- plot 2D heat maps
     if plot_1D_dz_by_r_by_frame_with_surface_profile:
+        import matplotlib as mpl
+        from matplotlib import cm
+        # -
         # read surface profile
         df_surface = empirical.read_surface_profile(dict_settings, subset='right_half', hole=True, fid_override=None)
         sr, sz = 'r', 'z'
@@ -278,9 +281,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         # make "amplified radial displacement" column
         # and set color scale
         df['r_dr'] = df[pr] + df[pdr] * dr_ampl
-        vmin, vmax = df[pdr].min(), df[pdr].max()
+        vmax_abs = df[pdr].abs().max()
+        vmin, vmax = -vmax_abs, vmax_abs  # df[pdr].min(), df[pdr].max()
+        cmap = 'coolwarm'
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         # ---
-        frames = np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
+        frames = np.arange(65, 115) # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
         for frame in frames:
             df_frame = df[df['frame'] == frame].sort_values(pr)
             # -
@@ -290,7 +296,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 y = df_frame[pdz].to_numpy()
                 # ---
                 # plot
-                fig, ax = plt.subplots(figsize=(5, 2.75))
+                fig, ax = plt.subplots(figsize=(5.25, 2.75))
                 # -
                 # fit spline
                 # data to fit spline to
@@ -318,8 +324,13 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                             dfpid = df_three[df_three['id'] == pid]
                             ax.plot(dfpid['r_dr'], dfpid[pdz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
                 # -
+                # plot surface
                 ax.plot(surfr, surfz, '-', color='gray', lw=0.5, label='SP', zorder=3.1)
-                ax.scatter(x, y, c=df_frame[pdr], s=5, cmap='coolwarm', vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
+                # plot particles w/ color bar
+                ax.scatter(x, y, c=df_frame[pdr], s=5, cmap=cmap, vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
+                fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$\Delta r \: (\mu m)$',
+                             pad=0.025, )
+                # -
                 ax.set_xlabel(r'$r \: (\mu m)$')
                 ax.set_xlim(x_lim)
                 ax.set_ylabel(r'$\Delta z \: (\mu m)$')

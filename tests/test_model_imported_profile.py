@@ -42,10 +42,10 @@ if __name__ == '__main__':
     base_dir = '/Users/mackenzie/Desktop/zipper_paper'
 
     # specific inputs
-    wid = 14
-    fid = 3
-    depth = 195
-    radius = 1772
+    wid = 13  # 14
+    fid = 6  # 3
+    depth = 200  # 195
+    radius = 1767  # 1772
     max_dz_for_strain_plot = depth - 3
     units = 1e-6
     num_segments = 3500  # NOTE: this isn't necessarily the final number of solver segments
@@ -68,8 +68,8 @@ if __name__ == '__main__':
     diameter = dict_fid['radius'] * 2 * units
     depth = depth * units
     t = 20e-6  # membrane thickness = 25 microns
-    pre_stretch = 1.1  # no pre-stretch
-    t_diel = 1e-6
+    pre_stretch = 1.025  # pre-stretch
+    t_diel = 2e-6
 
     # material
     Youngs_Modulus = 2e6
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     surface_roughness_diel = 0.0
 
     # voltage (can be made a dependent variable or hard-coded?)
-    U_is = np.arange(5, 360, 5)
+    U_is = np.arange(5, 255, 5)
 
     # profile to use
     use_tck = True
@@ -98,7 +98,10 @@ if __name__ == '__main__':
                                         x0=[1.25, 1.25],
                                         diameter_flat=0.125e-3)
     #"""
-    plt.plot(px, py)
+    plt.plot(px * 1e3, py * 1e6)
+    plt.xlabel('mm')
+    plt.ylabel('um')
+    plt.grid(alpha=0.25)
     plt.suptitle(save_id)
     plt.savefig(join(save_dir, save_id + '.png'), facecolor='w')
     plt.show()
@@ -161,11 +164,11 @@ if __name__ == '__main__':
     # setup
     d = dict_material  # dict_actuator dict_material
     k = 'E'  # 'pre_stretch' 'dia_flat' 'x0'
-    vs = [2e6, 5e6, 10e6]
+    vs = [2e6, 3e6, 4e6]
     k_fig = "E (MPa)"
-    vs_fig = [2, 5, 10]
+    vs_fig = [2, 3, 4]
     k_xlsx = 'E'
-    vs_xlsx = ['2MPa', '5MPa', '10MPa']
+    vs_xlsx = ['2MPa', '3MPa', '4MPa']
 
     # solve
     df_roots = []
@@ -181,7 +184,16 @@ if __name__ == '__main__':
 
         df_roots.append(df_roots1)
 
+    df_s = []
+    for df_, v in zip(df_roots, vs):
+        df_[k] = v
+        df_s.append(df_)
+    df_s = pd.concat(df_s)
+    df_s.to_excel(join(save_dir, save_id + '_sweep-{}_z-by-v.xlsx'.format(k)), index=False)
+
     plot_sweep_z_by_v(df_roots, key=k, vals=vs_fig, path_save=save_dir, save_id=save_id, key_title=k_fig)
+
+    raise ValueError()
 
     # ------------------------------------------------------------------------------------------------------------------
     # RUN FUNCTION - SOLVE AND PLOT STRAIN-BY-Z

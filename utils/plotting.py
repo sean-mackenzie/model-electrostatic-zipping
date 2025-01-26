@@ -352,18 +352,18 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
 def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
                     levels=15, units=None, title=None, overlay_circles=False, dict_settings=None):
     """
-    To-Do: add concentric circles around r = 0 to show radial coordinates
 
     :param df:
     :param pxyz:
-    :param: savepath:
-    :param field: (0, side-length of field-view (pixels or microns))
+    :param savepath:
+    :param field:
     :param interpolate:
     :param levels:
-    :param units: two-tuple (x-y units, z units), like: ('pixels', r'$\Delta z \: (\mu m)$')
+    :param units:
     :param title:
     :param overlay_circles:
     :param dict_settings:
+    :param vminmax:
     :return:
     """
 
