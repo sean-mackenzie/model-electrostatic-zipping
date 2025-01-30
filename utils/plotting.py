@@ -3,17 +3,21 @@
 # imports
 from os.path import join
 import numpy as np
+import pandas as pd
 from scipy.interpolate import griddata
 
 from tifffile import imread
 from skimage.transform import rescale
 
+import matplotlib as mpl
+from matplotlib import cm
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 
 from utils.shapes import complete_erf_profile
 from utils.empirical import read_surface_profile
+from utils.fit import wrapper_fit_radial_membrane_profile
 
 
 # -
@@ -180,6 +184,10 @@ def plot_surface_profilometry(dict_settings, savepath):
 # BELOW: PLOT EXPERIMENTAL DATA
 # ----------------------------------------------------------------------------------------------------------------------
 
+# --------------------------------------------------------
+# 1D PLOTS
+# --------------------------------------------------------
+
 def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_results):
     """
 
@@ -244,7 +252,7 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     ax1.plot(df[px1], df[pdz], '-o', ms=1.5, lw=0.75, label=pid)
     ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
     ax1.legend(title=r'$p_{ID}$')
-    ax1.grid(alpha=0.25)
+    ax1.grid(alpha=0.1)
     # plot V(t)
     ax1r = ax1.twinx()
     ax1r.plot(df[px1], df[py2], '-', color='gray', lw=0.75, alpha=0.5)
@@ -253,7 +261,7 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     ax2.plot(df[px1], df[pdr], '-o', ms=1.5, lw=0.75)
     ax2.set_xlabel(r'$t \: (s)$')
     ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
-    ax2.grid(alpha=0.25)
+    ax2.grid(alpha=0.1)
     # -
     plt.tight_layout()
     plt.savefig(join(path_results, 'pid{}.png'.format(pid)),
@@ -348,6 +356,101 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
                 dpi=300, facecolor='w')
     plt.close()
 
+
+def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, path_save, dict_fit, dr_ampl=1):
+    """
+
+    :param df:
+    :param przdr: ('rg', 'd0z', 'drg')
+    :param dict_surf: {'r': arr_r, 'z': arr_z, 'dr': arr_r = arr_r + dr, 'dz': arr_z = arr_z + dz}
+    :param frames: np.arange(1, 100)
+    :param path_save:
+    :param dict_fit: None or {'s': smoothing param, 'faux_r_zero': mean(r < r_zero), 'faux_r_edge': z(r=r_edge) = 0}
+    :param dr_ampl: amplification factor to visualize radial displacement.
+    :return:
+    """
+    # initialize variables
+    pr, pz, pdr = przdr
+    pdr_ampl = 'r_dr'
+    surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
+    # -
+    # get 3D DPT limits
+    rmin = 0
+    rmax = np.max([df[pr].max(), surf_r.max()])
+    zmin = np.min([df[pz].min(), surf_z.min()])
+    zmax = np.max([df[pz].max(), surf_z.max()])
+    # -
+    x_lim = rmin, rmax
+    y_lim = zmin - 5, zmax + 5
+    # ---
+    # make "amplified radial displacement" column
+    # and set color scale
+    df[pdr_ampl] = df[pr] + df[pdr] * dr_ampl
+    vmax_abs = df[pdr].abs().max()
+    vmin, vmax = -vmax_abs, vmax_abs
+    cmap = 'coolwarm'
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    # ---
+    for frame in frames:
+        df_frame = df[df['frame'] == frame].sort_values(pr)
+        x = df_frame[pdr_ampl].to_numpy()
+        y = df_frame[pz].to_numpy()
+        # -
+        # ---
+        # plot
+        fig, ax = plt.subplots(figsize=(5.25, 2.75))
+        # -
+        # fit spline
+        if dict_fit is not None:
+            xf = df_frame[pr].to_numpy()
+            xnew, ynew, xf, yf = wrapper_fit_radial_membrane_profile(
+                x=xf,
+                y=y,
+                s=dict_fit['s'],
+                faux_r_zero=dict_fit['faux_r_zero'],
+                faux_r_edge=dict_fit['faux_r_edge'],
+            )
+            # ax.scatter(xf, yf, s=2, color='k', alpha=0.25)  # show faux particles used for fitting
+            ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit', zorder=3.2)
+        # -
+        # ray tracing
+        if frame > frames[1]:
+            df_last = df[df['frame'] == frame - 1]
+            df_two = pd.concat([df_last, df_frame])
+            df_two = df_two.sort_values('frame')
+            for pid in df_two['id'].unique():
+                dfpid = df_two[df_two['id'] == pid]
+                ax.plot(dfpid[pdr_ampl], dfpid[pz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
+            if frame > frames[2]:
+                df_last2 = df[df['frame'] == frame - 2]
+                df_three = pd.concat([df_two, df_last2])
+                df_three = df_three.sort_values('frame')
+                for pid in df_three['id'].unique():
+                    dfpid = df_three[df_three['id'] == pid]
+                    ax.plot(dfpid[pdr_ampl], dfpid[pz], '-', color='gray', lw=0.25, alpha=0.25, zorder=3.1)
+        # -
+        # plot surface
+        ax.plot(surf_r, surf_z, '-', color='gray', lw=0.5, label='SP', zorder=3.1)
+        # plot particles w/ color bar
+        ax.scatter(x, y, c=df_frame[pdr], s=5, cmap=cmap, vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
+        fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
+                     label=r'$\Delta r \: (\mu m)$', pad=0.025, )
+        # -
+        ax.set_xlabel(r'$r \: (\mu m)$')
+        ax.set_xlim(x_lim)
+        ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+        ax.set_ylim(y_lim)
+        ax.grid(alpha=0.0625)
+        ax.set_title('frame: {:03d}'.format(frame))
+        plt.tight_layout()
+        plt.savefig(join(path_save, 'dz-r_by_fr{:03d}_+dr{}X.png'.format(frame, dr_ampl)),
+                    dpi=300, facecolor='w')
+        plt.close()
+    # ---
+
+# --------------------------------------------------------
+# 2D PLOTS
+# --------------------------------------------------------
 
 def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
                     levels=15, units=None, title=None, overlay_circles=False, dict_settings=None):

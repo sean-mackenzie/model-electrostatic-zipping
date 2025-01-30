@@ -14,7 +14,7 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01102025_W13-D1_C9-0pT'
+    TEST_CONFIG = '01262025_W10-A1_C7-20pT'
     TID = 1
 
     """
@@ -48,14 +48,14 @@ if __name__ == "__main__":
                         ** Knowing the exact position of the zipping interface, we can evaluate SLIPPAGE ALONG THE SIDEWALL! 
     """
     # -
-    # SETTINGS
+    # SETTINGS (True False)
     VERIFY_SETTINGS = False  # only need to run once per test configuration
     UPDATE_DEPENDENT = False  # True: update all dependent settings in dict_settings.xlsx
     # -
     # PRE-PROCESSING (True False)
-    PRE_PROCESS_COORDS = False  # If you change andor_keithley_delay time, you must pre-process coords.
-    PRE_PROCESS_IV = False  # Only needs to be run once; not dependent on synchronization timing settings.
-    MERGE_COORDS_AND_VOLTAGE = False
+    PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
+    PRE_PROCESS_IV = True  # Only needs to be run once; not dependent on synchronization timing settings.
+    MERGE_COORDS_AND_VOLTAGE = True
     # -
     # ANALYSES
     SECOND_PASS_XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization method
@@ -63,11 +63,12 @@ if __name__ == "__main__":
     # ---
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
-    START_FRAME, END_FRAMES = (0, 8), (195, 205)  # only used if test_settings.xlsx is not found
+    START_FRAME, END_FRAMES = (0, 4), (143, 147)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    DROP_PIDS = []  # []: remove bad particles from coords
     # -
     # ALTERNATE INITIAL COORDS
-    EXPORT_INITIAL_COORDS = False
-    USE_INITIAL_COORDS, USE_TID = False, 1
+    EXPORT_INITIAL_COORDS = False  # False True
+    D0F_IS_TID = 1
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -92,10 +93,10 @@ if __name__ == "__main__":
     FN_COORDS_STARTS_WITH = 'test_coords_t'
     FN_COORDS_SAVE = 'tid{}_coords.xlsx'.format(TID)
     FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)
-    FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(USE_TID)
+    FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(D0F_IS_TID)
     # -
     # Keithley
-    READ_IV_DIR = join(BASE_DIR, 'I-V')
+    READ_IV_DIR = join(BASE_DIR, 'I-V', 'xlsx')
     FN_IV_STARTS_WITH = 'tid{}_'.format(TID)
     FN_IV_SAVE = 'tid{}_I-V.xlsx'.format(TID)
     FN_IV_AVG_SAVE = 'tid{}_average-V-t.xlsx'.format(TID)
@@ -107,10 +108,6 @@ if __name__ == "__main__":
     for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS]:
         if not os.path.exists(pth):
             os.makedirs(pth)
-    # -
-    # Pre-run checks
-    if USE_INITIAL_COORDS is True and not os.path.exists(join(SAVE_COORDS, FN_COORDS_INITIAL_READ)):
-        raise ValueError("Initial coords for tid {} do not exist.".format(USE_TID))
     # -
     # ------------------------------------------------------------------------------------------------------------------
     # ---
@@ -133,6 +130,7 @@ if __name__ == "__main__":
             filename=FN_IV,
             start_frame=START_FRAME,
             end_frames=END_FRAMES,
+            drop_pids=DROP_PIDS,
             dict_settings=DICT_SETTINGS,
         )
         settings.write_settings_to_df(
@@ -150,23 +148,33 @@ if __name__ == "__main__":
             DF = pd.read_excel(join(READ_COORDS_DIR, FN_COORDS))
             # pre-process
             DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS)
-            # calculate "initial coords", so that "relative coords" can be determined
-            DF0 = dpt.calculate_initial_coords(df=DF, test_settings=DICT_TEST)
+            # get/calculate "initial coords", so that "relative coords" can be determined
             if EXPORT_INITIAL_COORDS:
-                DF0.to_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_SAVE), index=True)
-                raise ValueError("Always stop always exporting initial coords.")
-            if USE_INITIAL_COORDS:
-                DF0 = pd.read_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_READ))
-            DF = dpt.calculate_relative_coords(df=DF, test_settings=DICT_TEST, df0=DF0)
+                D0F = dpt.calculate_initial_coords(df=DF, frames=DICT_TEST['dpt_start_frame'])
+                D0F.to_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_SAVE), index=True)
+                raise ValueError("Always stop after exporting initial coords.")
+            else:
+                # get "pre-test" (i.e., before any testing) coords
+                D0F = pd.read_excel(join(SAVE_COORDS, FN_COORDS_INITIAL_READ), index_col=0)
+                # calculate relative coords (relative to pre-start (i.e., frame = 0)
+                # AND relative to pre-tests (i.e., before any voltage was applied).
+                DF = dpt.calculate_relative_coords(df=DF, d0f=D0F, test_settings=DICT_TEST)
+            # drop bad pids
+            if 'drop_pids' in DICT_TEST.keys():
+                if len(DICT_TEST['drop_pids']) > 0:
+                    DROP_PIDS.extend(DICT_TEST['drop_pids'])
+            if len(DROP_PIDS) > 0:
+                DF = DF[~DF['id'].isin(DROP_PIDS)]
+            print("Dropping pids: {}".format(DROP_PIDS))
             # export transformed dataframe
             # for reference: physical + pixel coordinates
             # DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=True)
             # for analysis: we need only keep physical coordinates (and frames) for compactness
             PHYS_COLS = ['frame', 't_sync', 'dt',
-                         'id', 'cm', 'z', 'dz',
-                         'drg', 'drm', 'rg', 'rm',
-                         'dxg', 'dxm', 'xg', 'xm',
-                         'dyg', 'dym', 'yg', 'ym',
+                         'id', 'cm', 'z', 'd0z', 'dz',
+                         'd0rg', 'drg', 'd0rm', 'drm', 'rg', 'rm',
+                         'd0xg', 'dxg', 'd0xm', 'dxm', 'xg', 'xm',
+                         'd0yg', 'dyg', 'd0ym', 'dym', 'yg', 'ym',
                          ]
             DF = DF[PHYS_COLS]
             DF.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE), index=False)

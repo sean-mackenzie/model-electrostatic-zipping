@@ -42,10 +42,10 @@ if __name__ == '__main__':
     base_dir = '/Users/mackenzie/Desktop/zipper_paper'
 
     # specific inputs
-    wid = 13  # 14
-    fid = 6  # 3
-    depth = 200  # 195
-    radius = 1767  # 1772
+    wid = 14
+    fid = 3
+    depth = 195
+    radius = 1772
     max_dz_for_strain_plot = depth - 3
     units = 1e-6
     num_segments = 3500  # NOTE: this isn't necessarily the final number of solver segments

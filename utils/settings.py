@@ -68,6 +68,7 @@ def get_dict_dtypes(name):
             'smu_vmax': int,
             'smu_dv': float,
             'smu_step_max': int,
+            'drop_pids': list,
         }
     else:
         raise ValueError('Name not in: [settings, test]')
@@ -110,7 +111,7 @@ def read_settings_to_dict(filepath, name, update_dependent=False):
                 dict_settings.update({k: int(v)})
             elif k in ['filename']:
                 dict_settings.update({k: str(v)})
-            elif k in ['dpt_end_frames']:
+            elif k in ['dpt_end_frames', 'drop_pids']:
                 dict_settings.update({k: eval(v)})
             else:
                 dict_settings.update({k: float(v)})
@@ -159,12 +160,13 @@ def get_settings(fp_settings, name, update_dependent=False):
     return read_settings_to_dict(filepath=fp_settings, name=name, update_dependent=update_dependent)
 
 
-def make_test_settings(filename, start_frame, end_frames, dict_settings):
+def make_test_settings(filename, start_frame, end_frames, drop_pids, dict_settings):
     """
 
     :param filename:
     :param start_frame:
     :param end_frames:
+    :param drop_pids:
     :param dict_settings:
     :return:
     """
@@ -174,7 +176,7 @@ def make_test_settings(filename, start_frame, end_frames, dict_settings):
     if filename is not None:
         tid, test_type, vmax, dv, step_max = smu.parse_voltage_waveform_from_filename(filename=filename)
     else:
-        tid, test_type, vmax, dv, step_max = 14, 1, 0, 0, 0
+        tid, test_type, vmax, dv, step_max = -1, 1, 0, 0, 0
     # -
     dict_test = {
         'tid': tid,
@@ -186,6 +188,7 @@ def make_test_settings(filename, start_frame, end_frames, dict_settings):
         'smu_vmax': vmax,
         'smu_dv': dv,
         'smu_step_max': step_max,
+        'drop_pids': drop_pids,
     }
     return dict_test
 

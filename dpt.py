@@ -49,14 +49,28 @@ def pre_process_coords(df, settings):
     # -
     return df
 
-def calculate_relative_coords(df, test_settings, df0=None):
+def calculate_initial_coords(df, frames):
+    df0 = df[(df['frame'] > frames[0]) & (df['frame'] < frames[1])].groupby('id').mean()
+    return df0
+
+def calculate_relative_coords(df, d0f, test_settings):
     # Define relative positions (i.e., displacement)
+    # relative to: t < t_start AND d0t = 0 (i.e.,
+    # before ever applying any voltage).
+    # 1. relative to: t < t_start
+    df = calculate_relative_start_test_coords(df, test_settings)
+    # 2. relative to: d0t = 0
+    df = calculate_relative_pre_test_coords(df, d0f)
+    return df
+
+def calculate_relative_start_test_coords(df, test_settings):
+    # Define relative positions (i.e., displacement)
+    # with respect to pre-this-test positions (i.e. frame = 1).
     # relative to: t < t_start
     # time
     df['dt'] = df['t_raw']
     # space
-    if df0 is None:
-        df0 = calculate_initial_coords(df, test_settings)
+    df0 = calculate_initial_coords(df, frames=test_settings['dpt_start_frame'])
     dfpids = []
     for pid in df['id'].unique():
         dfpid = df[df['id'] == pid]
@@ -68,11 +82,20 @@ def calculate_relative_coords(df, test_settings, df0=None):
     df = df.reset_index(drop=True)
     return df
 
-def calculate_initial_coords(df, test_settings):
-    # test-specific params
-    start_frame = test_settings['dpt_start_frame']
-    df0 = df[(df['frame'] > start_frame[0]) & (df['frame'] < start_frame[1])].groupby('id').mean()
-    return df0
+def calculate_relative_pre_test_coords(df, df0):
+    # Define relative positions (i.e., displacement)
+    # with respect to pre-test positions (i.e., before
+    # any voltage was ever applied).
+    dfpids = []
+    for pid in df['id'].unique():
+        dfpid = df[df['id'] == pid]
+        for v in ['xg', 'yg', 'rg', 'z', 'xm', 'ym', 'rm',
+                  'xg_pix', 'yg_pix', 'rg_pix', 'xm_pix', 'ym_pix', 'rm_pix']:
+            dfpid['d0' + v] = dfpid[v] - df0.loc[pid][v]
+        dfpids.append(dfpid)
+    df = pd.concat(dfpids)
+    df = df.reset_index(drop=True)
+    return df
 
 def merge_with_iv(df, dfv):
     """

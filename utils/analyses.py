@@ -11,16 +11,17 @@ from utils import plotting, empirical, fit
 def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # assign simple column labels
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
-    px, py, pr, pdx, pdy, pdr = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr']]
-    pz, pdz = 'z', 'dz'
+    px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
+    pz, pdz, pd0z = 'z', 'dz', 'd0z'
     # -
-    # modifiers (True, False)
-    eval_pids_drz = False  # True: calculate/export net-displacement per-particle in r- and z-directions
-    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
-    plot_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_by_synchronous_time_voltage = False
+    # modifiers (True False)
+    eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
+    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
+    plot_pids_by_synchronous_time_voltage = True
     plot_pids_dz_by_voltage_ascending = False  # Should probably always be False
     plot_pids_dz_by_voltage_hysteresis = False
+    only_pids = None  # if None, then plot all pids
     # -
     plot_1D_z_by_r_by_frame = False
     plot_1D_dz_by_r_by_frame = False
@@ -28,13 +29,23 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     plot_2D_dz_by_frame = False
     plot_2D_dr_by_frame = False
     # -
-    plot_1D_dz_by_r_by_frame_with_surface_profile = True
-    dr_ampl = 10
-    include_spline_fit_membrane = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = False
+    if plot_1D_dz_by_r_by_frame_with_surface_profile:
+        przdr = (pr, pd0z, pdr)
+        frames_with_surface_profile = np.arange(75, 126)  # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
+        dr_ampl = 10
+        df_surface = empirical.read_surface_profile(dict_settings, subset='right_half', hole=True, fid_override=None)
+        dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(), 'dr': 0, 'dz': 0}
+        dict_fit_memb = {
+            's': 1500,
+            'faux_r_zero': dict_settings['radius_hole_microns'],  # None: do not use faux(r=0) particle for fitting
+            'faux_r_edge': dict_settings['radius_microns'],  # None: do not use faux(r=A, dz=0) particle for fitting
+        }
+        dict_fit_memb = None
+    # -
     # for contourf plots
     levels_z = 15
     levels_r = 10
-    # -
     if xym == 'm':
         plot_pids_by_synchronous_time_voltage = False
         plot_pids_dz_by_voltage_ascending = False
@@ -141,7 +152,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     if plot_pids_by_frame:
         if dfd is None:
             dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
-        for pid in df.sort_values(by=pr, ascending=True)['id'].unique():
+        if only_pids is None:
+            pids_ = df.sort_values(by=pdz, ascending=False)['id'].unique()
+        else:
+            pids_ = only_pids
+        for pid in pids_:
             dfpid = df[df['id'] == pid]
             dz_mean = dfd[dfd['id'] == pid]['dz_mean'].item()
             dr_mean = dfd[dfd['id'] == pid]['dr_mean'].item()
@@ -155,7 +170,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
     # --- plot synchronous coords + voltage
     if plot_pids_by_synchronous_time_voltage or plot_pids_dz_by_voltage_ascending or plot_pids_dz_by_voltage_hysteresis:
-        for pid in df.sort_values(by=pr, ascending=True)['id'].unique():
+        if only_pids is None:
+            pids_ = df.sort_values(by=pdz, ascending=False)['id'].unique()
+        else:
+            pids_ = only_pids
+        for pid in pids_:
             dfpid = df[df['id'] == pid]
             if plot_pids_by_synchronous_time_voltage:
                 plotting.plot_pids_by_synchronous_time_voltage(
@@ -261,13 +280,19 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
     # --- plot 2D heat maps
     if plot_1D_dz_by_r_by_frame_with_surface_profile:
+        plotting.plot_dz_by_r_by_frame_with_surface_profile(
+            df,
+            przdr=przdr,
+            dict_surf=dict_surface_profilometry,
+            frames=frames_with_surface_profile,
+            path_save=path_results_1D_dz_by_r_by_frame_w_surf,
+            dict_fit=dict_fit_memb,
+            dr_ampl=dr_ampl,
+        )
+        """
         import matplotlib as mpl
         from matplotlib import cm
         # -
-        # read surface profile
-        df_surface = empirical.read_surface_profile(dict_settings, subset='right_half', hole=True, fid_override=None)
-        sr, sz = 'r', 'z'
-        surfr, surfz = df_surface[sr].to_numpy(), df_surface[sz].to_numpy()
         # -
         # get 3D DPT limits
         rmin, rmax = 0, df[pr].max()
@@ -286,7 +311,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         cmap = 'coolwarm'
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         # ---
-        frames = np.arange(65, 115) # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
+        frames = np.arange(94, 103) # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
         for frame in frames:
             df_frame = df[df['frame'] == frame].sort_values(pr)
             # -
@@ -302,7 +327,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 # data to fit spline to
                 if include_spline_fit_membrane:
                     xf = df_frame[pr].to_numpy()
-                    xnew, ynew, xf, yf = fit.wrapper_fit_radial_membrane_profile(x=xf, y=y, s=3000,
+                    xnew, ynew, xf, yf = fit.wrapper_fit_radial_membrane_profile(x=xf, y=y, s=2000,
                         dict_settings=dict_settings, faux_r_zero=True, faux_r_edge=True,
                     )
                     # ax.scatter(xf, yf, s=2, color='k', alpha=0.25)  # show faux particles used for fitting
@@ -344,3 +369,6 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                     dpi=300, facecolor='w')
                 plt.close()
             # ---
+        """
+        # -
+    # -

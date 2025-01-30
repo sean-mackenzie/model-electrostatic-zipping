@@ -12,24 +12,24 @@ import matplotlib.pyplot as plt
 if __name__ == '__main__':
     # model
     FP_MODEL = ('/Users/mackenzie/Desktop/zipper_paper/Modeling/apply model to my wafers/'
-                'first-pass_by-wid/wid13/wid13_fid6_sweep-E_z-by-v.xlsx')
+                'first-pass_by-wid/wid14/wid14_fid3_sweep-E_z-by-v.xlsx')
     DFM = pd.read_excel(FP_MODEL)
     # data
     FP_DATA = ('/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation/'
-               '01102025_W13-D1_C9-0pT/analyses/coords/tid1_merged-coords-volt.xlsx')
+               '01132025_W14-F1_C9-0pT/analyses-sigma=0.5/coords/tid1_merged-coords-volt.xlsx')
     DF = pd.read_excel(FP_DATA)
     # save
     PATH_SAVE = ('/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation/'
-                 '01102025_W13-D1_C9-0pT/analyses/representative_test1')
+                 '01132025_W14-F1_C9-0pT/analyses-sigma=0.5/representative_test1')
     # ---
     # -
     # -- setup
     # model
     mx, my = 'U', 'z'
-    Es = [3e6]
+    Es = [2e6]
     # data
     dx, dy = 'VOLT', 'dz'
-    pids = [2]
+    pids = [1]
     # --- pre-processing
     DFM = DFM[DFM[mx] < 205]
     DF = DF[DF['STEP'] < 41]
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     ax.legend()
     plt.tight_layout()
     plt.savefig(
-        join(PATH_SAVE, 'compare_data_to_model_pid=2_E=3MPa_pre-stretch=1.025.png'),
+        join(PATH_SAVE, 'compare_data_to_model_pid=1_E=2MPa_pre-stretch=1.025.png'),
         dpi=300,
         facecolor='w',
         bbox_inches='tight',
