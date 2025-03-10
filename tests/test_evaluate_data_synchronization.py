@@ -27,7 +27,7 @@ def visualize_staircase_levels(sampled_time, sampled_levels, leading_edge, slew_
 
 if __name__ == "__main__":
 
-    base_dir = '/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation/03072025_W12-D1_C19-30pT_20+10nmAu'
+    base_dir = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation/03072025_W12-D1_C19-30pT_20+10nmAu'
 
     filepath_coords = join(base_dir, 'results/test-idpt_test-46/test_coords_t_c__cal_c_20+10nmAu_t_test-46.xlsx')
     fig_title = 'tid46_testVAR3_300V_500HzSQU_data'

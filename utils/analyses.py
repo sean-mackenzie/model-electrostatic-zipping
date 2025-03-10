@@ -16,11 +16,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
+    average_max_n_positions = 5
     plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
     plot_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
     plot_pids_by_synchronous_time_voltage = True
     plot_pids_dz_by_voltage_ascending = False  # Should probably always be False
-    plot_pids_dz_by_voltage_hysteresis = False
+    plot_pids_dz_by_voltage_hysteresis = True
     only_pids = None  # if None, then plot all pids
     # -
     plot_1D_z_by_r_by_frame = False
@@ -29,11 +30,14 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     plot_2D_dz_by_frame = False
     plot_2D_dr_by_frame = False
     # -
-    plot_1D_dz_by_r_by_frame_with_surface_profile = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    przdr = (pr, pd0z, pdr)
+    dr_ampl = 10
     if plot_1D_dz_by_r_by_frame_with_surface_profile:
-        przdr = (pr, pd0z, pdr)
-        frames_with_surface_profile = np.arange(75, 126)  # dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1)
-        dr_ampl = 10
+        if 'animate_frames' in dict_test.keys():
+            frames_with_surface_profile = np.arange(dict_test['animate_frames'][0], dict_test['animate_frames'][1])
+        else:
+            frames_with_surface_profile = np.arange(25, 75)
         df_surface = empirical.read_surface_profile(dict_settings, subset='right_half', hole=True, fid_override=None)
         dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(), 'dr': 0, 'dz': 0}
         dict_fit_memb = {
@@ -79,7 +83,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     path_results_2D_dz_by_frame = join(path_results_rep, '2D_dz_by_frame')
     path_results_2D_dr_by_frame = join(path_results_rep, '2D_dr_by_frame')
     # path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dz-r_by_frame_w-surface')
-    path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, '1D_dzdr-r_by_frame_w-surf+drX+raytracing')
+    path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rep, f'1D_{przdr[1]}{przdr[2]}-r_by_frame_w-surf+dr{dr_ampl}X')
     # make directories
     pths = [path_results_rep,
             path_results_pids_by_frame, path_results_pids_by_synchronous_time_voltage,
@@ -102,22 +106,73 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
     # --- evaluate net displacement per-pid
     if eval_pids_drz:
+        # calculate displacement "snapshot"
+        # (position during end frames relative to start frames)
         dfd = dpt.calculate_net_displacement(
             df=df,
-            pxyrz=(px, py, pr, pz),
+            pxyr=(px, py, pr),
             start_frame=dict_test['dpt_start_frame'],
             end_frames=dict_test['dpt_end_frames'],
             path_results=path_results_rep,
+            average_max_n_positions=None,
+        )
+        # calculate net displacement
+        # (maximum displacement relative to initial coords (i.e., d0f))
+        dfd0 = dpt.calculate_net_total_displacement(
+            df=df,
+            pxyr=(px, py, pr),
+            start_frame=dict_test['dpt_start_frame'],
+            end_frames=None, # dict_test['dpt_end_frames'],
+            path_results=path_results_rep,
+            average_max_n_positions=average_max_n_positions,
         )
 
     # --- plot 2D heat map
     if plot_heatmaps:
+        if dfd0 is None:
+            dfd0 = pd.read_excel(join(path_results_rep, 'net-d0zr_per_pid.xlsx'))
+        # ---
+        plotting.plot_2D_heatmap(df=dfd0,
+                                 pxyz=(px, py, 'dz_mean'),
+                                 savepath=join(path_results_rep, 'dz-mean_per_pid_2D__d0z.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_z,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta_{o} z \: (\mu m)$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
+        plotting.plot_2D_heatmap(df=dfd0,
+                                 pxyz=(px, py, 'dr_mean'),
+                                 savepath=join(path_results_rep, 'dr-mean_per_pid_2D__d0r.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_r,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta_{o} r \: (\mu m)$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
+        plotting.plot_2D_heatmap(df=dfd0,
+                                 pxyz=(px, py, 'r_strain'),
+                                 savepath=join(path_results_rep, 'dr-strain_per_pid_2D__d0r.png'),
+                                 field=(0, dict_settings['field_of_view']),
+                                 interpolate='linear',
+                                 levels=levels_r,
+                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta_{o} r / r$'),
+                                 overlay_circles=True,
+                                 dict_settings=dict_settings,
+                                 )
+
+        # ---
+
         if dfd is None:
             dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
         # ---
         plotting.plot_2D_heatmap(df=dfd,
                                  pxyz=(px, py, 'dz_mean'),
-                                 savepath=join(path_results_rep, 'dz-mean_per_pid_2D.png'),
+                                 savepath=join(path_results_rep, 'dz-mean_per_pid_2D__dz.png'),
                                  field=(0, dict_settings['field_of_view']),
                                  interpolate='linear',
                                  levels=levels_z,
@@ -128,7 +183,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
         plotting.plot_2D_heatmap(df=dfd,
                                  pxyz=(px, py, 'dr_mean'),
-                                 savepath=join(path_results_rep, 'dr-mean_per_pid_2D.png'),
+                                 savepath=join(path_results_rep, 'dr-mean_per_pid_2D__dr.png'),
                                  field=(0, dict_settings['field_of_view']),
                                  interpolate='linear',
                                  levels=levels_r,
@@ -139,7 +194,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
 
         plotting.plot_2D_heatmap(df=dfd,
                                  pxyz=(px, py, 'r_strain'),
-                                 savepath=join(path_results_rep, 'dr-strain_per_pid_2D.png'),
+                                 savepath=join(path_results_rep, 'dr-strain_per_pid_2D__dr.png'),
                                  field=(0, dict_settings['field_of_view']),
                                  interpolate='linear',
                                  levels=levels_r,
@@ -195,6 +250,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 plotting.plot_pids_dz_by_voltage_hysteresis(
                     df=dfpid,
                     pdzdr=(pdz, pdr),
+                    dict_test=dict_test,
+                    pid=pid,
+                    path_results=path_results_pids_dz_by_voltage_hysteresis)
+                plotting.plot_pids_dz_by_voltage_hysteresis(
+                    df=dfpid,
+                    pdzdr=(pd0z, pd0r),
                     dict_test=dict_test,
                     pid=pid,
                     path_results=path_results_pids_dz_by_voltage_hysteresis)

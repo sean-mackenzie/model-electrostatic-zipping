@@ -2,7 +2,7 @@ import os
 from os.path import join
 import pandas as pd
 
-import smu, dpt
+import smu, awg, dpt
 from utils import settings, analyses, plotting, empirical
 
 
@@ -10,12 +10,12 @@ if __name__ == "__main__":
     """
     NOTES:
         1. requires: analyses/settings/dict_settings.xlsx
-        2. if analyses/settings/dict_tid{}_settings.xlsx is not found, must enter: START_FRAME, END_FRAMES
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01262025_W10-A1_C7-20pT'
-    TID = 1
+    TEST_CONFIG = '03072025_W12-D1_C19-30pT_20+10nmAu'
+    TID = 61
+    IV_ACDC = 'AC'
 
     """
     NOTES:
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # -
     # PRE-PROCESSING (True False)
     PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
-    PRE_PROCESS_IV = True  # Only needs to be run once; not dependent on synchronization timing settings.
+    PRE_PROCESS_IV = True  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
     MERGE_COORDS_AND_VOLTAGE = True
     # -
     # ANALYSES
@@ -62,9 +62,10 @@ if __name__ == "__main__":
     # -
     # ---
     # -
-    # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
-    START_FRAME, END_FRAMES = (0, 4), (143, 147)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
+    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
     DROP_PIDS = []  # []: remove bad particles from coords
+    USE_GENERIC_DC_TEST_SETTINGS = False  # in rare cases, do not parse FN_IV filename and instead use generic settings
     # -
     # ALTERNATE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
@@ -77,7 +78,8 @@ if __name__ == "__main__":
     # FILEPATHS
     # ---
     # directories
-    BASE_DIR = join('/Users/mackenzie/Desktop/zipper_paper/Testing/Zipper Actuation', TEST_CONFIG)
+    ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024'
+    BASE_DIR = join(ROOT_DIR, 'zipper_paper/Testing/Zipper Actuation', TEST_CONFIG)
     SAVE_DIR = join(BASE_DIR, 'analyses')
     SAVE_SETTINGS = join(SAVE_DIR, 'settings')
     SAVE_COORDS = join(SAVE_DIR, 'coords')
@@ -95,9 +97,11 @@ if __name__ == "__main__":
     FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)
     FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(D0F_IS_TID)
     # -
-    # Keithley
+    # Keithley and/or Agilent
     READ_IV_DIR = join(BASE_DIR, 'I-V', 'xlsx')
     FN_IV_STARTS_WITH = 'tid{}_'.format(TID)
+    FN_IVDC_ENDS_WITH = 'dV.xlsx'  # if I-V file has this ending, then it is a DC test
+    FN_IVAC_ENDS_WITH = '_data.xlsx'  # if I-V file has this ending, then it is an AC test
     FN_IV_SAVE = 'tid{}_I-V.xlsx'.format(TID)
     FN_IV_AVG_SAVE = 'tid{}_average-V-t.xlsx'.format(TID)
     # Merged (3DPT + Keithley)
@@ -108,11 +112,29 @@ if __name__ == "__main__":
     for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS]:
         if not os.path.exists(pth):
             os.makedirs(pth)
+
+    SETTINGS_HANDLER_DICT = {
+        'fp_settings': FP_SETTINGS,
+        'update_dependent': UPDATE_DEPENDENT,
+        'fp_test_settings': FP_TEST_SETTINGS,
+        'iv_acdc': IV_ACDC,
+        'use_generic_dc_test_settings': USE_GENERIC_DC_TEST_SETTINGS,  # 'pre_process_iv': PRE_PROCESS_IV,
+        'read_iv_dir': READ_IV_DIR,
+        'fn_iv_startswith': FN_IV_STARTS_WITH,
+        'fn_ivdc_endswith': FN_IVDC_ENDS_WITH,
+        'fn_ivac_endswith': FN_IVAC_ENDS_WITH,
+        'drop_pids': DROP_PIDS,
+        'start_frame': START_FRAME,
+        'end_frames': END_FRAMES,
+    }
     # -
     # ------------------------------------------------------------------------------------------------------------------
     # ---
     # SETTINGS
     # ---
+    DICT_SETTINGS, DICT_TEST = settings.settings_handler(settings_handler_dict=SETTINGS_HANDLER_DICT)
+    # ---
+    """
     # setup-specific
     # (i.e., for each set of calibration images)
     DICT_SETTINGS = settings.get_settings(fp_settings=FP_SETTINGS, name='settings', update_dependent=UPDATE_DEPENDENT)
@@ -126,7 +148,7 @@ if __name__ == "__main__":
             FN_IV = [x for x in os.listdir(READ_IV_DIR) if x.startswith(FN_IV_STARTS_WITH) and x.endswith('.xlsx')][0]
         else:
             FN_IV = None
-        DICT_TEST = settings.make_test_settings(
+        DICT_TEST = smu.make_test_settings(
             filename=FN_IV,
             start_frame=START_FRAME,
             end_frames=END_FRAMES,
@@ -137,6 +159,7 @@ if __name__ == "__main__":
             s=DICT_TEST,
             filepath_save=FP_TEST_SETTINGS,
         )
+    """
     # ---
     # PRE-PROCESSING
     # ---
@@ -147,7 +170,7 @@ if __name__ == "__main__":
             FN_COORDS = [x for x in os.listdir(READ_COORDS_DIR) if x.startswith(FN_COORDS_STARTS_WITH)][0]
             DF = pd.read_excel(join(READ_COORDS_DIR, FN_COORDS))
             # pre-process
-            DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS)
+            DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS, acdc=IV_ACDC)
             # get/calculate "initial coords", so that "relative coords" can be determined
             if EXPORT_INITIAL_COORDS:
                 D0F = dpt.calculate_initial_coords(df=DF, frames=DICT_TEST['dpt_start_frame'])
@@ -182,23 +205,40 @@ if __name__ == "__main__":
             DF = pd.read_excel(join(SAVE_COORDS, FN_COORDS_SAVE))
         # --- Keithley source voltage data
         if PRE_PROCESS_IV:
-            # Find and read coords
-            DFV = pd.read_excel(
-                join(READ_IV_DIR, DICT_TEST['filename']),
-                index_col=0,
-                names=['VOLT', 'CURR', 'TIMESTAMP'],
-            )
-            DFV = smu.pre_process_keithley(
-                df=DFV,
-                delay=DICT_TEST['smu_source_delay_time'],
-                integration=DICT_SETTINGS['integration_time'],
-            )
-            DFV.to_excel(join(SAVE_COORDS, FN_IV_SAVE), index=False)
-            # Average voltage by time
-            DFVG = smu.average_voltage_by_source_time(df=DFV)
-            DFVG.to_excel(join(SAVE_COORDS, FN_IV_AVG_SAVE), index=False)
+            if IV_ACDC == 'DC':
+                # Find and read coords
+                DFV = pd.read_excel(
+                    join(READ_IV_DIR, DICT_TEST['filename']),
+                    index_col=0,
+                    names=['VOLT', 'CURR', 'TIMESTAMP'],
+                )
+                DFV = smu.pre_process_keithley(
+                    df=DFV,
+                    delay=DICT_TEST['smu_source_delay_time'],
+                    integration=DICT_SETTINGS['integration_time'],
+                )
+                DFV.to_excel(join(SAVE_COORDS, FN_IV_SAVE), index=False)
+                # Average voltage by time
+                DFVG = smu.average_voltage_by_source_time(df=DFV)
+                DFVG.to_excel(join(SAVE_COORDS, FN_IV_AVG_SAVE), index=False)
+            elif IV_ACDC == 'AC':
+                # Find and read coords
+                DFV = pd.read_excel(
+                    join(READ_IV_DIR, DICT_TEST['filename']),
+                    # index_col=0,
+                    names=['awg_volt', 'dt'],
+                )
+                DFV = awg.pre_process_awg(
+                    df=DFV,
+                    amplifier_gain=DICT_TEST['amplifier_gain'],
+                )
+                DFV.to_excel(join(SAVE_COORDS, FN_IV_SAVE), index=False)
+                # Average voltage by time
+                DFVG = smu.average_voltage_by_source_time(df=DFV)
+                DFVG.to_excel(join(SAVE_COORDS, FN_IV_AVG_SAVE), index=False)
         else:
             DFV = pd.read_excel(join(SAVE_COORDS, FN_IV_SAVE))
+        # -
         # --- Merge (3DPT + Keithley)
         if MERGE_COORDS_AND_VOLTAGE:
             DF = dpt.merge_with_iv(

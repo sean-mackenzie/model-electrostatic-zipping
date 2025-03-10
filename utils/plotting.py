@@ -249,19 +249,22 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     fig, (ax1, ax2) = plt.subplots(figsize=(6, 6), nrows=2, sharex=True,
                                    gridspec_kw={'height_ratios': [1.4, 1]})
     # plot z/dz by frames
-    ax1.plot(df[px1], df[pdz], '-o', ms=1.5, lw=0.75, label=pid)
+    ax1.plot(df[px1], df[pdz], '-o', ms=1.5, lw=0.75, label=pdz)
+    ax1.plot(df[px1], df['d0z'], '-o', ms=1.5, lw=0.75, label='d0z')
     ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
-    ax1.legend(title=r'$p_{ID}$')
+    ax1.legend(title=r'$p_{ID}=$' + str(pid), fontsize='small')
     ax1.grid(alpha=0.1)
     # plot V(t)
     ax1r = ax1.twinx()
     ax1r.plot(df[px1], df[py2], '-', color='gray', lw=0.75, alpha=0.5)
     ax1r.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5)
     # plot r/dr by frames
-    ax2.plot(df[px1], df[pdr], '-o', ms=1.5, lw=0.75)
+    ax2.plot(df[px1], df[pdr], '-o', ms=1.5, lw=0.75, label=pdr)
+    ax2.plot(df[px1], df['d0rg'], '-o', ms=1.5, lw=0.75, label='d0rg')
     ax2.set_xlabel(r'$t \: (s)$')
-    ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax2.set_ylabel(r'$\Delta r \: (\mu m)$', fontsize='small')
     ax2.grid(alpha=0.1)
+    ax2.legend()
     # -
     plt.tight_layout()
     plt.savefig(join(path_results, 'pid{}.png'.format(pid)),
@@ -324,9 +327,14 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
     px1 = 'VOLT'
     # inputs
     pdz, pdr = pdzdr
+    # step_max depends on AC or DC
+    if 'awg_mod_ampl_num_steps' in dict_test.keys():
+        step_max = dict_test['awg_mod_ampl_num_steps'] - 1
+    else:
+        step_max = dict_test['smu_step_max']
     # pre-processing
-    dfpid_ascending = df[df['STEP'] <= dict_test['smu_step_max']]
-    dfpid_descending = df[df['STEP'] > dict_test['smu_step_max']]
+    dfpid_ascending = df[df['STEP'] <= step_max]
+    dfpid_descending = df[df['STEP'] > step_max]
 
     dfg_asc = dfpid_ascending.groupby(px1).mean().reset_index()
     dfg_desc = dfpid_descending.groupby(px1).mean().reset_index()
@@ -352,7 +360,7 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
     ax2.grid(alpha=0.25)
 
     plt.tight_layout()
-    plt.savefig(join(path_results, 'pid{}.png'.format(pid)),
+    plt.savefig(join(path_results, 'pid{}_{}{}.png'.format(pid, pdz, pdr)),
                 dpi=300, facecolor='w')
     plt.close()
 

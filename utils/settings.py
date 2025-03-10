@@ -1,9 +1,22 @@
 import os
 from os.path import join
 import pandas as pd
-import smu
+import smu, awg
 
 def get_fid(feature_label):
+    """
+    Determines a unique feature identifier (fid) based on the input feature
+    label. The `feature_label` is analyzed by its starting and ending
+    characters to compute the fid. The function raises exceptions for invalid
+    or unsupported feature_label patterns.
+
+    :param feature_label: The label used to derive the feature identifier.
+    :type feature_label: str
+    :return: The computed feature identifier based on the input label.
+    :rtype: int
+    :raises ValueError: If `feature_label` does not start with a supported
+        character (a-f) or end with a supported value (1-3).
+    """
     if feature_label.startswith('a'):
         fid = 0
     elif feature_label.startswith('b'):
@@ -28,56 +41,98 @@ def get_fid(feature_label):
         raise ValueError()
     return fid
 
-def get_dict_dtypes(name):
-    if name == 'settings':
-        dict_dtypes = {
-            'feature_label': str,
-            'fid': int,
-            'exposure_time': float,
-            'frame_rate': float,
-            'microns_per_pixel': float,
-            'image_size': int,
-            'field_of_view': float,
-            'nplc': float,
-            'integration_time': float,
-            'source_delay_time_by_test': dict,
-            'padding': int,
-            'drop_frame_zero': bool,
-            'scale_z': float,
-            'xyc_pixels': tuple,
-            'xyc_microns': tuple,
-            'radius_pixels': float,
-            'radius_hole_pixels': float,
-            'radius_microns': float,
-            'radius_hole_microns': float,
-            'andor_keithley_delay': float,
-            'path_process_profiles': str,
-            'fid_process_profile': int,
-            'step_process_profile': int,
-            'path_image_overlay': str,
-            'membrane_thickness': float,
-        }
-    elif name == 'test':
-        dict_dtypes = {
-            'tid': int,
-            'filename': str,
-            'dpt_start_frame': tuple,
-            'dpt_end_frames': tuple,
-            'smu_test_type': int,
-            'smu_source_delay_time': float,
-            'smu_vmax': int,
-            'smu_dv': float,
-            'smu_step_max': int,
-            'drop_pids': list,
-        }
-    else:
-        raise ValueError('Name not in: [settings, test]')
+
+def get_dict_dtypes():
+    """
+    Generates and returns a dictionary containing key-value pairs where the keys are string names of
+    parameters/settings and the values represent the expected data types of each parameter.
+
+    The dictionary provides a mapping of configuration parameters to their associated data types
+    for reference or validation purposes. This allows consistent handling and verification of the
+    expected data types across various settings in an application or use case.
+
+    :rtype: dict
+    :return: A dictionary where the keys are parameter names (as strings) and the values indicate
+             the corresponding data types associated with each parameter.
+    """
+    dict_dtypes = {
+        'feature_label': str,
+        'fid': int,
+        'exposure_time': float,
+        'frame_rate': float,
+        'microns_per_pixel': float,
+        'image_size': int,
+        'field_of_view': float,
+        'nplc': float,
+        'integration_time': float,
+        'source_delay_time_by_test': dict,
+        'padding': int,
+        'drop_frame_zero': bool,
+        'drop_first_n_frames': int,
+        'scale_z': float,
+        'xyc_pixels': tuple,
+        'xyc_microns': tuple,
+        'radius_pixels': float,
+        'radius_hole_pixels': float,
+        'radius_microns': float,
+        'radius_hole_microns': float,
+        'andor_keithley_delay': float,
+        'path_process_profiles': str,
+        'fid_process_profile': int,
+        'step_process_profile': int,
+        'path_image_overlay': str,
+        'membrane_thickness': float,
+        'andor_delay_to_awg_input': float,
+        'monitor_delay_to_awg_input': float,
+    }
     return dict_dtypes
 
 
-def read_settings_to_dict(filepath, name, update_dependent=False):
-    if name not in ['settings', 'test']:
-        raise ValueError('Name not in: [settings, test]')
+def get_dict_dtype_list(data_type):
+    """
+    Retrieves a list of keys based on the specified data type. The function
+    supports predefined data types, such as 'int', 'str', 'eval', and 'special',
+    and corresponds each to a specific list of strings. Raises an exception
+    if the data type is not recognized.
+
+    :param data_type: A string representing the data type. Supported values
+                      are 'int', 'str', 'eval', and 'special'.
+    :type data_type: str
+    :return: A list of strings corresponding to the specified data type.
+    :rtype: list
+    :raises ValueError: If the data type is not among the supported values.
+    """
+    if data_type == 'int':
+        keys = ['fid', 'image_size', 'padding', 'drop_first_n_frames', 'fid_process_profile', 'step_process_profile']
+    elif data_type == 'str':
+        keys = ['feature_label', 'path_process_profiles', 'path_image_overlay']
+    elif data_type == 'eval':
+        keys = ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']
+    elif data_type == 'special':
+        keys = []
+    else:
+        raise ValueError('Names limited to: [int, string, eval]. No list for floats')
+    return keys
+
+
+def read_settings_to_dict_handler(filepath, name, update_dependent=False):
+    """
+    Reads settings from an Excel file and returns a dictionary of settings with appropriate data types.
+    The function processes data differently based on the `name` parameter, and handles specific conditions
+    such as dependent settings updates when `update_dependent` is set to True.
+
+    :param filepath: Path to the input Excel file containing the settings.
+    :type filepath: str
+    :param name: Specifies the type of settings to process. Must be one of ['settings', 'DC', 'AC'].
+    :type name: str
+    :param update_dependent: Determines whether dependent settings should be ignored in the processing.
+    :type update_dependent: bool
+    :return: A dictionary containing the processed settings from the input file with the appropriate data types.
+    :rtype: dict
+    :raises ValueError: If the `name` is not one of ['settings', 'DC', 'AC'].
+    """
+    if name not in ['settings', 'DC', 'AC']:
+        raise ValueError('Name not in: [settings, DC, AC]')
 
     df = pd.read_excel(filepath, index_col=0)
     ks = df.index.values.tolist()
@@ -86,11 +141,11 @@ def read_settings_to_dict(filepath, name, update_dependent=False):
     dict_settings = {}
     if name == 'settings':
         for k, v in zip(ks, vs):
-                if k in ['fid', 'image_size', 'padding', 'fid_process_profile', 'step_process_profile']:
+                if k in get_dict_dtype_list(data_type='int'):
                     dict_settings.update({k: int(v)})
-                elif k in ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']:
+                elif k in get_dict_dtype_list(data_type='eval'):
                     dict_settings.update({k: eval(v)})
-                elif k in ['feature_label', 'path_process_profiles', 'path_image_overlay']:
+                elif k in get_dict_dtype_list(data_type='str'):
                     dict_settings.update({k: str(v)})
                 else:
                     dict_settings.update({k: float(v)})
@@ -100,26 +155,29 @@ def read_settings_to_dict(filepath, name, update_dependent=False):
             for k in dependent_settings:
                 _ = dict_settings.pop(k, None)
         dict_settings = check_dependent_settings(dict_settings, name, filepath)
-    elif name == 'test':
-        for k, v in zip(ks, vs):
-            if k == 'dpt_start_frame':
-                if isinstance(v, int):
-                    dict_settings.update({k: (0, int(v))})
-                else:
-                    dict_settings.update({k: eval(v)})
-            elif k in ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max']:
-                dict_settings.update({k: int(v)})
-            elif k in ['filename']:
-                dict_settings.update({k: str(v)})
-            elif k in ['dpt_end_frames', 'drop_pids']:
-                dict_settings.update({k: eval(v)})
-            else:
-                dict_settings.update({k: float(v)})
+    elif name == 'DC':
+        dict_settings = smu.read_settings_to_dict(filepath=filepath)
+    elif name == 'AC':
+        dict_settings = awg.read_settings_to_dict(filepath=filepath)
 
     return dict_settings
 
 
 def check_dependent_settings(dict_settings, name, filepath):
+    """
+    Check and update dependent settings within a given dictionary.
+
+    This function inspects a dictionary of settings and verifies if certain
+    dependent settings are missing. If missing, it calculates their values
+    based on existing keys and updates the dictionary accordingly. The
+    function also writes the updated settings to a file if any changes occur.
+
+    :param dict_settings: Dictionary containing the configuration settings.
+    :param name: Name identifying the particular configuration (e.g., 'settings').
+    :param filepath: Path to save the updated settings file.
+    :return: The updated settings dictionary.
+    :rtype: dict
+    """
     update_settings = False
     if name == 'settings':
         for k2, k1 in zip(['field_of_view', 'radius_microns', 'radius_hole_microns'],
@@ -152,45 +210,159 @@ def check_dependent_settings(dict_settings, name, filepath):
 
 
 def write_settings_to_df(s, filepath_save):
+    """
+    Write settings dictionary into an Excel file using pandas.
+
+    This function takes a dictionary representing settings, converts it
+    into a pandas DataFrame, and saves it as an Excel file with the given
+    file path. The keys of the dictionary are written as rows with their
+    associated values under a specified column.
+
+    :param s: A dictionary containing settings to be saved. The keys
+        represent parameter names, and their associated values are the
+        settings values.
+    :param filepath_save: A string representing the file path where the
+        Excel file will be saved.
+    :return: None
+    """
     df = pd.DataFrame.from_dict(data=s, orient='index', columns=['v'])
-    df.to_excel(filepath_save, index=True, index_label='k')
+    df.to_excel(filepath_save, index=True, index_label='k', sheet_name='settings')
 
 
 def get_settings(fp_settings, name, update_dependent=False):
-    return read_settings_to_dict(filepath=fp_settings, name=name, update_dependent=update_dependent)
+    return read_settings_to_dict_handler(filepath=fp_settings, name=name, update_dependent=update_dependent)
 
 
-def make_test_settings(filename, start_frame, end_frames, drop_pids, dict_settings):
+def test_settings_handler(settings_handler_dict, dict_settings):
     """
+    Handles the processing and generation of test settings based on the specified
+    parameters and available resources. This includes retrieving pre-configured
+    settings, creating generic settings, or generating specific AC/DC test
+    settings by analyzing available data files. The function ensures the derived
+    settings are appropriately handled and optionally saved to a provided file
+    path, aiming to facilitate flexible and reliable test setup.
 
-    :param filename:
-    :param start_frame:
-    :param end_frames:
-    :param drop_pids:
-    :param dict_settings:
-    :return:
+    :param settings_handler_dict: A dictionary containing various configuration
+        parameters related to file paths, naming conventions, and specific flags
+        (e.g., to control processing behavior) essential for determining and
+        processing test settings.
+    :type settings_handler_dict: dict
+    :param dict_settings: A dictionary containing the structural and configurational
+        test settings to be utilized in cases where specific or generic test
+        settings need to be created or modified.
+    :type dict_settings: dict
+    :return: A dictionary representing the resolved or generated test settings,
+        whether sourced from pre-existing configurations, dynamically generated AC/DC
+        settings, or generic defaults when data is not available or applicable.
+    :rtype: dict
     """
-    if isinstance(start_frame, int):
-        start_frame = (0, start_frame)
-    # parse I-V filename to get Keithley voltage waveform details
-    if filename is not None:
-        tid, test_type, vmax, dv, step_max = smu.parse_voltage_waveform_from_filename(filename=filename)
+    if os.path.exists(settings_handler_dict['fp_test_settings']):
+        dict_test = get_settings(
+            fp_settings=settings_handler_dict['fp_test_settings'],
+            name=settings_handler_dict['iv_acdc'],
+        )
     else:
-        tid, test_type, vmax, dv, step_max = -1, 1, 0, 0, 0
-    # -
-    dict_test = {
-        'tid': tid,
-        'filename': filename,
-        'dpt_start_frame': start_frame,
-        'dpt_end_frames': end_frames,
-        'smu_test_type': test_type,
-        'smu_source_delay_time': dict_settings['source_delay_time_by_test'][test_type],
-        'smu_vmax': vmax,
-        'smu_dv': dv,
-        'smu_step_max': step_max,
-        'drop_pids': drop_pids,
-    }
+        if settings_handler_dict['use_generic_dc_test_settings']:
+            # in rare cases (for DC tests only), we want to
+            # return a dictionary of "generic" test settings
+            # (e.g., because data is missing or incompatible)
+            dict_test = make_generic_test_settings(settings_handler_dict, dict_settings)
+        else:
+            # find file with test settings
+            fn_iv = [
+                x for x in os.listdir(settings_handler_dict['read_iv_dir']) if
+                x.startswith(settings_handler_dict['fn_iv_startswith']) and x.endswith('.xlsx')
+            ][0]
+
+            # make test settings dict
+            if fn_iv.endswith(settings_handler_dict['fn_ivdc_endswith']):
+                # make DC test settings dict
+                dict_test = smu.make_test_settings(
+                    filename=fn_iv,
+                    start_frame=settings_handler_dict[ 'start_frame'],
+                    end_frames=settings_handler_dict['end_frames'],
+                    drop_pids=settings_handler_dict[ 'drop_pids' ],
+                    dict_settings=dict_settings,
+                )
+            elif fn_iv.endswith(settings_handler_dict['fn_ivac_endswith']):
+
+                # make AC test settings dict
+                dict_test = awg.make_test_settings(
+                    filename=fn_iv,
+                    settings_handler_dict=settings_handler_dict,
+                    dict_settings=dict_settings,
+            )
+            else:
+                raise ValueError(f'fn_iv ({fn_iv}) does not end with'
+                                 f' {settings_handler_dict["fn_ivdc_endswith"]} or'
+                                 f' {settings_handler_dict["fn_ivac_endswith"]}')
+        # export
+        write_settings_to_df(
+            s=dict_test,
+            filepath_save=settings_handler_dict['fp_test_settings'],
+        )
     return dict_test
+
+
+def make_generic_test_settings(settings_handler_dict, dict_settings):
+    """
+    Generate a dictionary of generic test settings using the provided settings handler
+    parameters and dictionary settings.
+
+    This function combines specific parameters extracted from the provided
+    `settings_handler_dict` with the provided dictionary settings `dict_settings`
+    to create a comprehensive dictionary of settings tailored for executing tests.
+
+    :param settings_handler_dict: Dictionary containing specific handler settings.
+       It should include the following keys:
+       - 'start_frame': Starting frame for processing.
+       - 'end_frames': End frames for processing.
+       - 'drop_pids': List of process IDs to ignore during execution.
+    :param dict_settings: Additional dictionary of settings that will be included
+       alongside the `settings_handler_dict` values.
+    :return: A dictionary containing the combined test settings that
+       consolidates the input values for practical usage.
+    :rtype: dict
+    """
+    dict_test_generic = smu.make_test_settings(
+        filename=None,
+        start_frame=settings_handler_dict['start_frame'],
+        end_frames=settings_handler_dict['end_frames'],
+        drop_pids=settings_handler_dict['drop_pids'],
+        dict_settings=dict_settings,
+    )
+    return dict_test_generic
+
+
+
+def settings_handler(settings_handler_dict):
+    """
+    Handles the settings for a system by retrieving and testing the settings
+    as per the provided settings handler dictionary. The function retrieves
+    settings based on the provided configuration and subsequently tests
+    the settings to ensure proper setup.
+
+    :param settings_handler_dict: A dictionary containing necessary configurations
+        for handling settings. It should include keys like 'fp_settings' for file
+        path settings and 'update_dependent' for determining if dependent settings
+        need to be updated.
+    :type settings_handler_dict: dict
+    :return: A tuple containing the settings dictionary and the test results
+        dictionary after processing and validating the input.
+    :rtype: tuple
+    """
+    dict_settings = get_settings(
+        fp_settings=settings_handler_dict['fp_settings'],
+        name='settings',
+        update_dependent=settings_handler_dict['update_dependent'],
+    )
+
+    dict_test = test_settings_handler(
+        settings_handler_dict=settings_handler_dict,
+        dict_settings=dict_settings,
+    )
+
+    return dict_settings, dict_test
 
 
 if __name__ == "__main__":
