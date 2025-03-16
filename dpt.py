@@ -107,7 +107,7 @@ def calculate_relative_pre_test_coords(df, df0):
     df = df.reset_index(drop=True)
     return df
 
-def merge_with_iv(df, dfv):
+def merge_with_iv(df, dfv, dfvm=None):
     """
     Note, the index of df and dfv is important.
     If df index is not [0, 1, 2, etc...], then I-V
@@ -115,6 +115,7 @@ def merge_with_iv(df, dfv):
 
     :param df:
     :param dfv:
+    :param dfvm:
     :return:
     """
     # Old method below: deprecated on 3/9/2025
@@ -139,6 +140,17 @@ def merge_with_iv(df, dfv):
     df['SOURCE_TIME_MIDPOINT'] = pd.Series(result)
     df = df.merge(right=dfv, left_on='SOURCE_TIME_MIDPOINT', right_on='TIME')
     df = df.drop(columns=['TIME'])
+
+    if dfvm is not None:
+        # 'MONITOR_TIME', 'MONITOR_VALUE'
+        result = find_closest(
+            original_values=df['t_sync'].to_numpy(),
+            reference_values=dfvm['MONITOR_TIME'].to_numpy(),
+        )
+        df['MONITOR_TIME_MIDPOINT'] = pd.Series(result)
+        df = df.merge(right=dfvm, left_on='MONITOR_TIME_MIDPOINT', right_on='MONITOR_TIME')
+        df = df.drop(columns=['MONITOR_TIME'])
+
     return df
 
 

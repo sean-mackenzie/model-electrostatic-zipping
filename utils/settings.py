@@ -80,10 +80,12 @@ def get_dict_dtypes():
         'path_process_profiles': str,
         'fid_process_profile': int,
         'step_process_profile': int,
+        'path_model_strain': str,
         'path_image_overlay': str,
         'membrane_thickness': float,
         'andor_delay_to_awg_input': float,
         'monitor_delay_to_awg_input': float,
+        'monitor_time_scale_factor_est': float,
     }
     return dict_dtypes
 
@@ -105,7 +107,7 @@ def get_dict_dtype_list(data_type):
     if data_type == 'int':
         keys = ['fid', 'image_size', 'padding', 'drop_first_n_frames', 'fid_process_profile', 'step_process_profile']
     elif data_type == 'str':
-        keys = ['feature_label', 'path_process_profiles', 'path_image_overlay']
+        keys = ['feature_label', 'path_process_profiles', 'path_model_strain', 'path_image_overlay']
     elif data_type == 'eval':
         keys = ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']
     elif data_type == 'special':
@@ -202,6 +204,10 @@ def check_dependent_settings(dict_settings, name, filepath):
             dict_settings.update({
                 'fid': get_fid(feature_label=dict_settings['feature_label']),
             })
+            if 'fid_process_profile' not in dict_settings.keys():
+                dict_settings.update({
+                    'fid_process_profile': dict_settings['fid'],
+                })
             update_settings = True
 
     if update_settings:
@@ -282,6 +288,7 @@ def test_settings_handler(settings_handler_dict, dict_settings):
                     start_frame=settings_handler_dict[ 'start_frame'],
                     end_frames=settings_handler_dict['end_frames'],
                     drop_pids=settings_handler_dict[ 'drop_pids' ],
+                    d0f_is_tid=settings_handler_dict['d0f_is_tid'],
                     dict_settings=dict_settings,
                 )
             elif fn_iv.endswith(settings_handler_dict['fn_ivac_endswith']):

@@ -1,6 +1,7 @@
 # tests/test_model_sweep.py
 
 # imports
+from os.path import join
 import numpy as np
 import pandas as pd
 
@@ -10,7 +11,7 @@ from utils.energy import mechanical_energy_density_Gent, electrostatic_energy_de
 
 def solve_energy_iterative_shape_function(config, dict_actuator, dict_material,
                                           U_is, append_dfs=False, export_excel=False,
-                                          save_id='arb'):
+                                          save_id='arb', path_save=None):
     """
 
     :param config:
@@ -186,10 +187,10 @@ def solve_energy_iterative_shape_function(config, dict_actuator, dict_material,
 
         if export_excel == True:
             print("Exporting")
-            df.to_excel('{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i))
+            df.to_excel(join(path_save, '{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i)))
         elif isinstance(export_excel, (int, float)):
             if U_i == export_excel:
-                df.to_excel('{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i))
+                df.to_excel(join(path_save, '{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i)))
 
         # ---
 

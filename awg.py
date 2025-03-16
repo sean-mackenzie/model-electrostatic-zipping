@@ -26,6 +26,8 @@ def get_dict_dtypes():
         'dpt_end_frames': eval,
         'animate_frames': eval,
         'drop_pids': list,
+        'd0f_is_tid': int,
+        'monitor_time_scale_factor': float,
         'save_dir': str,
         'save_id': str,
         'test_type': str,
@@ -93,7 +95,7 @@ def get_dict_dtype_list(data_type):
         ['int', 'str', 'eval', 'special'].
     """
     if data_type == 'int':
-        keys = ['tid']
+        keys = ['tid', 'd0f_is_tid']
     elif data_type == 'str':
         keys = ['filename',
                 'iv_acdc',
@@ -196,6 +198,9 @@ def make_test_settings(filename, settings_handler_dict, dict_settings):
     elif dict_test['test_type'] == 'VAR3':
         dpt_end_frames = (30, 37)  # exactly: (28, 39) but not including 28 and 39
         animate_frames = (25, 66)  # two cycles: (25, 66); all cycles: (20, 190)
+    elif dict_test['test_type'] == 'STD1SIN':
+        dpt_end_frames = (100, 110)  # exactly: (83, 88) but not including 83 and 88
+        animate_frames = (70, 150)
     else:
         raise ValueError('Only implemented test types: [STD1, STD2, STD3, VAR3]')
 
@@ -205,6 +210,7 @@ def make_test_settings(filename, settings_handler_dict, dict_settings):
         'dpt_start_frame': (0, 20),  # exactly: (0, 30)
         'dpt_end_frames': dpt_end_frames,
         'drop_pids': settings_handler_dict['drop_pids'],
+        'd0f_is_tid': settings_handler_dict['d0f_is_tid'],
         'animate_frames': animate_frames,
     })
 

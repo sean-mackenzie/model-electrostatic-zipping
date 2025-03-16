@@ -28,11 +28,8 @@ def profile_tck2solver(r, z):
 
     return r, z
 
-def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck=None):
-    if fp_tck is None:
-        fp_tck = ('/Users/mackenzie/Desktop/zipper_paper/Fabrication/grayscale/'
-                  'w{}/results/profiles_tck/fid{}_tc_k=3.xlsx'.format(wid, fid))
 
+def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck):
     tck = read_tck(filepath=fp_tck)
     r = np.linspace(0, radius, num_segments)
     z = profile_tck(tck, r)
@@ -55,6 +52,7 @@ def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck=None):
     }
 
     return dict_fid
+
 
 # --- SURFACE PROFILES
 
@@ -95,3 +93,49 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
         raise ValueError("Options are: [None or full, abs, right_half, left_half]")
 
     return df
+
+
+def get_zipping_interface_r_from_z(z0, surf_r, surf_z):
+    # make sure the arrays are sorted
+    # primary sort: r
+    sorted_indices = np.argsort(surf_r)
+    # Use these indices to sort both arrays
+    sorted_r = surf_r[sorted_indices]
+    sorted_z = surf_z[sorted_indices]
+    # find smallest r that satisfies
+    rmin_nearest = sorted_r[np.argmax(np.abs(sorted_z - z0) < 2)]
+    return rmin_nearest
+
+
+def get_zipping_interface_rz(r, z, surf_r, surf_z):
+    # If you get problems, try using the code below to enforce limits on r, z
+    """
+    # make sure the arrays are sorted
+    surf_z = surf_z[np.argsort(surf_r)]
+    surf_r = surf_r[np.argsort(surf_r)]
+    # define the maximum allowable zipping interface
+    surf_r_max = surf_r[np.argmax(surf_z < -2)]
+    surf_z_max = surf_z[np.argmax(surf_z < -2)]
+    """
+
+    # 0th-pass: estimate r, z as average of particles nearest the center
+    zipping_interface_r = np.percentile(r, 7.5)
+    zipping_interface_z = np.mean(z[r < zipping_interface_r])
+
+    # 1st-pass: get zipping interface
+    zipping_interface_r = get_zipping_interface_r_from_z(
+        z0=zipping_interface_z,
+        surf_r=surf_r,
+        surf_z=surf_z,
+    )
+    # 2nd-pass: refine zipping interface
+    r_fringing = np.percentile(r[r < zipping_interface_r], 75)
+    # r_midpoint = (zipping_interface_r + np.min(r)) / 2
+    zipping_interface_z = np.mean(z[(r < zipping_interface_r) & (r > r_fringing)])
+    zipping_interface_r = get_zipping_interface_r_from_z(
+        z0=zipping_interface_z,
+        surf_r=surf_r,
+        surf_z=surf_z,
+    )
+    return zipping_interface_r, zipping_interface_z
+

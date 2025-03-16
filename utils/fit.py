@@ -25,6 +25,10 @@ def wrapper_fit_radial_membrane_profile(x, y, s, faux_r_zero=None, faux_r_edge=N
     """
     if faux_r_zero is not None:
         x_fake, y_fake = 0, np.mean(y[x < faux_r_zero])
+
+        x_fake = np.linspace(x_fake, faux_r_zero, num=5, endpoint=False)
+        y_fake = np.repeat(y_fake, 5)
+
         x = np.append(x_fake, x)
         y = np.append(y_fake, y)
     if faux_r_edge is not None:
@@ -32,7 +36,13 @@ def wrapper_fit_radial_membrane_profile(x, y, s, faux_r_zero=None, faux_r_edge=N
         x = np.append(x, x_fake)
         y = np.append(y, y_fake)
 
-    xnew = np.linspace(x.min(), x.max(), 200)
+    # sort values (in case faux_r_edge is not largest radial position)
+    sort_indices = np.argsort(x)
+    # Sort both arrays using the sorted indices
+    x = x[sort_indices]
+    y = y[sort_indices]
+
+    xnew = np.linspace(x.min(), x.max(), 50)
     ynew = fit_smoothing_spline(x, y, s, xnew)
 
     return xnew, ynew, x, y

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import splrep, BSpline
 
 
-def smooth_array(x, y, smoothing, num_points, degree=3):
+def smooth_array(x, y, smoothing, num_points, degree=3, return_tck=False):
     """
     Find the B-spline representation of a 1-D curve.
     Refer to : https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
@@ -26,7 +26,53 @@ def smooth_array(x, y, smoothing, num_points, degree=3):
     tck = splrep(x, y, s=smoothing, k=degree)
     x2 = np.linspace(x.min(), x.max(), num_points)
     y2 = BSpline(*tck)(x2)
+    if return_tck:
+        return x2, y2, tck
     return x2, y2
+
+
+def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3, path_save=None):
+
+    # create figure and plot at each step
+    fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True, figsize=(10, 10))
+
+    # --- STEP 1: plot both halves, to evaluate symmetry and radius
+    dfp = df[(df['r'] > 0)]
+    dfn = df[(df['r'] < 0)]
+    dfn.loc[:, 'r'] = dfn['r'] * -1  # dfn.loc[dfn['column'] == value, 'another_column'] = new_value
+    ax1.plot(dfp.r, dfp.z, '-', label='right_half: r>0')
+    ax1.plot(dfn.r, dfn.z, '-', label='left_half: r<0')
+    ax1.axvline(radius, color='k', ls='--', lw=0.5)
+    ax1.grid(alpha=0.25)
+    ax1.legend(title='subset', loc='upper left')
+    ax1.set_title('Evaluate symmetry and radius')
+
+    # --- STEP 2: refine radius
+    if subset == 'left_half':
+        dfp = dfn
+    dfpp = dfp[(dfp['r'] < radius + 25)]
+    df = dfp[(dfp['r'] < radius)].reset_index(drop=True)
+    ax2.plot(dfpp.r, dfpp.z, '-', color='gray', alpha=0.5, label='radius + 25')
+    ax2.plot(df.r, df.z, '-', color='r', label='radius')
+    ax2.grid(alpha=0.25)
+    z_at_radius = df['z'].iloc[df['r'].idxmax()]
+    ax2.legend(title='z(r=radius) = {}'.format(np.round(z_at_radius, 2)), loc='upper left')
+
+    # --- STEP 3: smooth and plot smoothed
+    rx = df.r.to_numpy()
+    ry = df.z.to_numpy()
+    px1, py1, tck = smooth_array(rx, ry, smoothing, num_points, degree=degree, return_tck=True)
+    ax3.plot(rx, ry, 'k-o', ms=2, lw=2, label='raw')
+    ax3.plot(px1, py1, 'r-o', ms=1, label='smooth')
+    ax3.grid(alpha=0.125)
+    ax3.legend(title='subset: {}'.format(subset), loc='upper left')
+    plt.tight_layout()
+    if path_save is not None:
+        plt.savefig(join(path_save, 'manually_fit_tck_to_surface_profile.png'), dpi=300,
+                    facecolor='w', bbox_inches='tight')
+    plt.show()
+
+    return tck
 
 
 if __name__ == '__main__':

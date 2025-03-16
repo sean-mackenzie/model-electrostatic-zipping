@@ -5,6 +5,7 @@ from os.path import join
 import numpy as np
 import pandas as pd
 from scipy.interpolate import griddata
+from scipy.optimize import curve_fit
 
 from tifffile import imread
 from skimage.transform import rescale
@@ -16,7 +17,7 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 
 from utils.shapes import complete_erf_profile
-from utils.empirical import read_surface_profile
+from utils.empirical import read_surface_profile, get_zipping_interface_rz
 from utils.fit import wrapper_fit_radial_membrane_profile
 
 
@@ -188,6 +189,138 @@ def plot_surface_profilometry(dict_settings, savepath):
 # 1D PLOTS
 # --------------------------------------------------------
 
+def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, save_id):
+    # --- 3D DPT data
+    pdz, pdr, pr_strain = 'dz_mean', 'dr_mean', 'r_strain'
+    x, y2, y3 = dfd[pdz].abs(), dfd[pr_strain], dfd[pdr]
+    # --- Model data
+    # for radial displacement, we want all data
+    mx3 = dfm['dZ'].to_numpy() * 1e6
+    my3 = dfm['disp_r_microns'].to_numpy()
+    # because strain goes highly non-linear near max deflection, we must limit
+    dfm = dfm[dfm['dZ'] < dfm['dZ'].max() - 2e-6]
+    mx = dfm['dZ'] * 1e6
+    my1 = dfm['t_f'] * 1e6
+    my2a, my2b = dfm['strain_xy'], dfm['strain_z_inv']
+
+    # --- plot
+
+    fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True, figsize=(5, 5))
+
+    ax1.plot(mx, my1, 'k-', label='Model')
+    ax1.set_ylabel(r'$t_{memb} \: (\mu m)$')
+    ax1.grid(alpha=0.15)
+    ax1.legend(fontsize='small')
+
+    # ax2.plot(mx, my2b, '--', label='Model: out-of-plane')
+    ax2.plot(mx, my2a, 'k-', label='Model')
+    ax2.plot(x, y2, 'ro', ms=1, label='Experiment')
+    ax2.set_ylabel(r'$Strain_{in-plane}$')
+    if np.min(y2) < 0.99:
+        ax2.set_ylim(bottom=0.99)
+    ax2.grid(alpha=0.15)
+    ax2.legend(fontsize='small')
+
+    ax3.plot(mx3, my3, 'k-', label='Model')
+    ax3.plot(x, y3, 'ro', ms=1, label='Experiment')
+    ax3.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax3.set_xlabel(r'$ z \: (\mu m)$')
+    ax3.grid(alpha=0.15)
+    ax3.legend(fontsize='small')
+    plt.tight_layout()
+    plt.savefig(join(path_results, f'compare_depth_dependent_in_plane_stretch_with_model_{save_id}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+
+
+def plot_depth_dependent_in_plane_stretch_from_dfd(dfd, path_results, save_id):
+    pdz, pdr, pr_strain = 'dz_mean', 'dr_mean', 'r_strain'
+    x, y1, y2 = dfd[pdz].abs(), dfd[pr_strain], dfd[pdr]
+
+    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(4.85, 3.3))
+
+    ax1.plot(x, y1, 'o', ms=1, label=pdz)
+    ax2.plot(x, y2, 'o', ms=1, label=pdr)
+
+    ax1.set_ylabel('Strain (in-plane)')
+    ax1.grid(alpha=0.15)
+
+    ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax2.set_xlabel(r'$ z \: (\mu m)$')
+    ax2.grid(alpha=0.15)
+    plt.tight_layout()
+    plt.savefig(join(path_results, f'depth_dependent_in_plane_stretch_{save_id}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+
+def plot_all_pids_displacement_trajectory(df, px, pdzdr, path_results):
+    pdz, pdr = pdzdr
+    pcm = 'cm'
+    pids = df.sort_values('d0z', ascending=True)['id'].unique()
+
+    # -
+    fig, (ax1, ax2, ax3) = plt.subplots(figsize=(6, 10), nrows=3, sharex=True,
+                                   gridspec_kw={'height_ratios': [1.25, 1, 0.75]})
+
+    for pid in pids:
+        df_pid = df[df['id'] == pid]
+        if px in ['VOLT', 'STEP']:
+            dfstd = df_pid.groupby('STEP').std().reset_index()
+            df_pid = df_pid.groupby('STEP').mean().reset_index()
+            ax1.errorbar(df_pid[px], df_pid[pdz], yerr=dfstd[pdz], fmt='-o', ms=1, lw=1, capsize=2, elinewidth=1)
+            ax2.errorbar(df_pid[px], df_pid[pdr], yerr=dfstd[pdr], fmt='-o', ms=1, lw=1, capsize=2, elinewidth=1)
+            ax3.errorbar(df_pid[px], df_pid[pcm], yerr=dfstd[pcm], fmt='-o', ms=1, lw=1, capsize=2, elinewidth=1)
+        else:
+            if len(pids) < 10:
+                ax1.plot(df_pid[px], df_pid[pdz], '-o', ms=0.75, lw=0.5, label=pid)
+                ax1.legend(fontsize='small')
+            else:
+                ax1.plot(df_pid[px], df_pid[pdz], '-o', ms=0.75, lw=0.5)
+            ax2.plot(df_pid[px], df_pid[pdr], '-o', ms=0.75, lw=0.5)
+            ax3.plot(df_pid[px], df_pid[pcm], '-o', ms=0.75, lw=0.5)
+
+    # plot dz by X
+    ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
+    ax1.grid(alpha=0.125)
+
+    # plot dr by X
+    ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax2.grid(alpha=0.125)
+
+    # plot cm by X
+    ax3.set_ylabel(r'$c_{m}$')
+    ax3.set_ylim([0, 1])
+    ax3.set_yticks([0, 1])
+    ax3.grid(alpha=0.125)
+    ax3.set_xlabel(px)
+
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pids_by_{}.png'.format(px)),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
+def plot_multi_single_pid_displacement_trajectory(df, px, py, path_results):
+    pids = df.sort_values(py, ascending=False)['id'].unique()
+    # -
+    fig, axs = plt.subplots(figsize=(6, 10), nrows=len(pids), sharex=True,
+                            gridspec_kw={'height_ratios': [1, 1, 1]})
+    for ax, pid in zip(axs, pids):
+        df_pid = df[df['id'] == pid]
+        if px in ['VOLT', 'STEP']:
+            dfstd = df_pid.groupby('STEP').std().reset_index()
+            df_pid = df_pid.groupby('STEP').mean().reset_index()
+            ax.errorbar(df_pid[px], df_pid[py], yerr=dfstd[py], fmt='-o', ms=1, lw=1, capsize=2, elinewidth=1)
+        else:
+            ax.plot(df_pid[px], df_pid[py], '-o', ms=1, lw=1, label=pid)
+            ax.legend(fontsize='small', title=r'$p_{ID}$')
+        ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+        ax.grid(alpha=0.125)
+    axs[-1].set_xlabel(px)
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pids_by_{}_{}-pids{}.png'.format(px, py, pids)),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
 def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_results):
     """
 
@@ -203,7 +336,7 @@ def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_resul
     px = 'frame'
     pcm = 'cm'
     # -
-    fig, (ax1, ax2) = plt.subplots(figsize=(6, 6), nrows=2, sharex=True,
+    fig, (ax1, ax2) = plt.subplots(figsize=(8, 6), nrows=2, sharex=True,
                                    gridspec_kw={'height_ratios': [1.25, 1]})
 
     # plot dz by frames
@@ -222,7 +355,7 @@ def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_resul
     # plot dr by frames
     ax2.plot(df[px], df[pdr], '-o', ms=0.75, lw=0.5)
     ax2.set_xlabel('Frame')
-    # ax2.set_xticks(np.arange(0, df[px].max() + 15, 20))
+    ax2.set_xticks(np.arange(0, df[px].max() + 15, 25))
     ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
     ax2.grid(alpha=0.125)
     ax2.set_title(r'$\Delta r_{net}=$' + ' {} '.format(dr_mean) + r'$\mu m$')
@@ -230,6 +363,43 @@ def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_resul
     plt.tight_layout()
     plt.savefig(join(path_results, 'pid{}.png'.format(pid)), dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
+
+
+def plot_single_pid_dr_by_dz(df, pdzdr, pid, path_results, only_frames=None):
+    if only_frames is not None:
+        df = df[(df['frame'] > only_frames[0]) & (df['frame'] < only_frames[1])]
+    pdz, pdr = pdzdr
+    # -
+
+    # plot setup
+    x_lim = df[pdr].abs().max() * 1.1
+
+    # split into positive and negative radial displacement
+    dfp = df[df[pdr] > 0]
+    dfn = df[df[pdr] < 0]
+
+    # -
+    fig, ax = plt.subplots()
+
+    # plot dz by frames
+    ax.plot(df[pdr], df[pdz], '-', color='k', lw=0.5, label=r'$p_{ID}=$' + str(pid))
+
+    ax.plot(dfp[pdr], dfp[pdz], 'ro', ms=3, label=r'$+ \Delta r$')
+    ax.plot(dfn[pdr], dfn[pdz], 'bo', ms=3, label=r'$- \Delta r$')
+
+    ax.axvline(0, color='gray', ls='--', lw=0.5)
+
+    ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+    ax.set_xlabel(r'$\Delta r \: (\mu m)$')
+    ax.set_xlim([-x_lim, x_lim])
+    ax.grid(alpha=0.125)
+    ax.legend()
+
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pid{}.png'.format(pid)), dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
 
 
 def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
@@ -264,6 +434,68 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     ax2.set_xlabel(r'$t \: (s)$')
     ax2.set_ylabel(r'$\Delta r \: (\mu m)$', fontsize='small')
     ax2.grid(alpha=0.1)
+    ax2.legend()
+    # -
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pid{}.png'.format(pid)),
+                dpi=300, facecolor='w')
+    plt.close()
+
+
+def plot_pids_by_synchronous_time_voltage_monitor(df, pz, pid, test_settings, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param pid:
+    :param path_results:
+    :return:
+    """
+    # hard-coded
+    px, py1, py2 = 't_sync', 'VOLT', 'MONITOR_VALUE'
+    # plot
+    fig, (ax1, ax2) = plt.subplots(figsize=(10, 5), nrows=2, sharex=True,
+                                   gridspec_kw={'height_ratios': [1.4, 1]})
+    # plot z/dz by frames
+    ax1.plot(df[px], df[pz], 'k-', ms=1, lw=1, label=pz)
+    ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
+    ax1.legend(title=r'$p_{ID}=$' + str(pid), fontsize='small')
+    ax1.grid(alpha=0.2)
+    # plot V(t)
+    ax1r = ax1.twinx()
+    if test_settings['keithley_monitor'] == 'VOLT':
+        ax1r.plot(df[px], df[py2], '-', color='tab:blue', ms=1, lw=0.75, label=r'$V_{app} \: (V)$')
+        ax1r.set_ylabel('OUTPUT: {}Hz {} (V)'.format(test_settings['awg_freq'], test_settings['awg_wave']),
+                        color='tab:blue')
+
+        y1max = df[pz].abs().max()
+        y2max = df[py2].abs().max()
+        ax1.set_ylim([y1max * -1.05, y1max * 1.05])
+        ax1r.set_ylim([y2max * -1.05, y2max * 1.05])
+        ax1.legend(title=r'$p_{ID}=$' + str(pid), fontsize='small')
+        ax1.grid(alpha=0.2)
+    else:
+        ax1r.plot(df[px], df[py1], '-', color='gray', lw=0.75, alpha=0.5)
+        ax1r.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5)
+    # plot monitor values
+    ax2.plot(df[px], df[py2], '-o', ms=1.5, lw=0.75,
+             label='OUTPUT: {}Hz {}'.format(test_settings['awg_freq'], test_settings['awg_wave']))
+    ax2.set_xlabel(r'$t \: (s)$')
+    ax2.set_xticks(np.arange(0, df[px].max() + 0.1, 1))
+    ax2.grid(alpha=0.2)
+    # -
+    if test_settings['keithley_monitor'] == 'VOLT':
+        ax2.plot(df[px], df[py1], '-', color='gray', lw=0.75, alpha=0.5, label='INPUT: AMPL.')
+        ax2.plot(df[px], df[py1] * -1, '-', color='gray', lw=0.75, alpha=0.5)
+        ax2.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5)
+        ax2.legend()
+    else:
+        ax2.set_ylabel(f'MONITOR: {test_settings['keithley_monitor']} ({test_settings['keithley_measure_units']})',
+                       fontsize='small')
+        ax2r = ax2.twinx()
+        ax2r.plot(df[px], df[py1], '-', color='gray', lw=0.75, alpha=0.5)
+        ax2r.plot(df[px], df[py1] * -1, '-', color='gray', lw=0.75, alpha=0.5)
+        ax2r.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5)
     ax2.legend()
     # -
     plt.tight_layout()
@@ -365,7 +597,7 @@ def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
     plt.close()
 
 
-def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, path_save, dict_fit, dr_ampl=1):
+def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, path_save, dict_fit, dr_ampl=1, show_interface=True):
     """
 
     :param df:
@@ -381,6 +613,8 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
     pr, pz, pdr = przdr
     pdr_ampl = 'r_dr'
     surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
+
+
     # -
     # get 3D DPT limits
     rmin = 0
@@ -418,7 +652,8 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
                 faux_r_zero=dict_fit['faux_r_zero'],
                 faux_r_edge=dict_fit['faux_r_edge'],
             )
-            # ax.scatter(xf, yf, s=2, color='k', alpha=0.25)  # show faux particles used for fitting
+            if dict_fit['show_faux_particles']:
+                ax.scatter(xf, yf, s=20, color='k', marker='*', alpha=0.95)  # show faux particles used for fitting
             ax.plot(xnew, ynew, 'r-', lw=0.5, label='Fit', zorder=3.2)
         # -
         # ray tracing
@@ -443,6 +678,17 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
         ax.scatter(x, y, c=df_frame[pdr], s=5, cmap=cmap, vmin=vmin, vmax=vmax, label='FPs', zorder=3.3)
         fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
                      label=r'$\Delta r \: (\mu m)$', pad=0.025, )
+
+        if show_interface:
+            # --- calculate position of zipping interface
+            zipping_interface_r, zipping_interface_z = get_zipping_interface_rz(
+                r=df_frame[pr].to_numpy(),
+                z=df_frame[pz].to_numpy(),
+                surf_r=surf_r,
+                surf_z=surf_z,
+            )
+            ax.axhline(zipping_interface_z, 0, 1, ls='--', color='gray', lw=0.5, alpha=0.5, zorder=3.0)
+            ax.axvline(zipping_interface_r, 0, 1, ls='--', color='gray', lw=0.5, alpha=0.5, zorder=3.0)
         # -
         ax.set_xlabel(r'$r \: (\mu m)$')
         ax.set_xlim(x_lim)
@@ -456,9 +702,314 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
         plt.close()
     # ---
 
+
+def plot_dz_by_r_by_frois_with_surface_profile(df, przdr, dict_surf, frames, path_save, dict_fit):
+    """
+
+    :param df:
+    :param przdr: ('rg', 'd0z', 'drg')
+    :param dict_surf: {'r': arr_r, 'z': arr_z, 'dr': arr_r = arr_r + dr, 'dz': arr_z = arr_z + dz}
+    :param frames: np.arange(1, 100)
+    :param path_save:
+    :param dict_fit: None or {'s': smoothing param, 'faux_r_zero': mean(r < r_zero), 'faux_r_edge': z(r=r_edge) = 0}
+    :return:
+    """
+    # initialize variables
+    pr, pz, pdr = przdr
+    surf_r = dict_surf['r'] + dict_surf['dr']
+    surf_z = (dict_surf['z'] + dict_surf['dz']) * dict_surf['scale_z']
+    # -
+    # get 3D DPT limits
+    rmin = 0
+    rmax = np.max([df[pr].max(), surf_r.max()])
+    zmin = np.min([df[pz].min(), surf_z.min()])
+    zmax = np.max([df[pz].max(), surf_z.max()])
+    # -
+    # spline smoothing parameter
+    if dict_fit is not None:
+        spline_smooths = dict_fit['s']
+        if isinstance(spline_smooths, (int, float)):
+            spline_smooths = [spline_smooths] * len(frames)
+        # constrain x_lim_max using radius of feature instead of range of surface profile
+        rmax = np.max([df[pr].max(), dict_fit['faux_r_edge'] * 1.075])
+    else:
+        spline_smooths = [0] * len(frames)
+    # -
+    x_lim = rmin, rmax
+    y_lim = zmin - 5, zmax + 5
+    # ---
+    # set color scale
+    vmin, vmax = df[pz].min(), df[pz].max()
+    cmap = 'coolwarm'
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    clrs = [mpl.cm.coolwarm(norm(df[df['frame'] == frame][pz].min())) for frame in frames]
+    # ---
+    # plot
+    fig, ax = plt.subplots(figsize=(5.25, 2.75))
+
+    # plot surface
+    ax.plot(surf_r, surf_z, '-', color='gray', lw=0.5, zorder=3.1)  # , label='SP'
+    ax.fill_between(surf_r, y_lim[0], surf_z, fc='gray', alpha=0.125, ec='gray')
+
+    for frame, clr, s in zip(frames, clrs, spline_smooths):
+        df_frame = df[df['frame'] == frame].sort_values(pr)
+        x = df_frame[pr].to_numpy()  # radial position
+        y = df_frame[pz].to_numpy()  # axial position or axial displacement
+        # -
+        # get voltage corresponding to this frame
+        if frame == frames[0]:
+            voltage_frame = 0
+        else:
+            voltage_frame = df_frame['VOLT'].values.tolist()[0]
+        # ---
+        # -
+        # fit spline
+        if dict_fit is not None:
+            xf = df_frame[pr].to_numpy()
+            xnew, ynew, xf, yf = wrapper_fit_radial_membrane_profile(
+                x=xf,
+                y=y,
+                s=s,
+                faux_r_zero=dict_fit['faux_r_zero'],
+                faux_r_edge=dict_fit['faux_r_edge'] + dict_surf['dr'],
+            )
+            if dict_fit['show_faux_particles']:
+                ax.scatter(xf, yf, s=20, color='k', marker='*', alpha=0.95)  # show faux particles used for fitting
+            ax.plot(xnew, ynew, '--', color=clr, lw=0.5, zorder=3.2)  # , label='Fit'
+        # -
+        # plot particles w/ color bar
+        ax.scatter(x, y, s=5, color=clr, zorder=3.3, label=int(np.round(voltage_frame)))  # , label='FPs'
+        # plot particle ID's for reference
+        plot_particle_ids = False
+        if plot_particle_ids:
+            id_ = df_frame['id'].to_numpy()
+            for xi, yi, pid in zip(x, y, id_):
+                ax.text(xi, yi, str(pid), color='black', fontsize=8)
+
+    # fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$\Delta z \: (\mu m)$', pad=0.025, )
+    # -
+    ax.set_xlabel(r'$r \: (\mu m)$')
+    ax.set_xlim(x_lim)
+    ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+    ax.set_ylim(y_lim)
+    ax.grid(alpha=0.0625)
+    # ax.set_title('frames: {}'.format(frames))
+    ax.legend(title=r'$V_{app} \: (V)$', loc='lower right', fontsize='small')
+    plt.tight_layout()
+    plt.savefig(join(path_save, 'dz-r_by_frois{}_legend-voltage.png'.format(frames)),
+                dpi=300, facecolor='w')
+    plt.close()
+    # ---
+
+
+def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_save):
+    """
+
+    :param df:
+    :param przdr: ('rg', 'd0z', 'drg')
+    :param dict_surf: {'r': arr_r, 'z': arr_z, 'dr': arr_r = arr_r + dr, 'dz': arr_z = arr_z + dz}
+    :param frames: np.arange(1, 100)
+    :param path_save:
+    :param dict_fit: None or {'s': smoothing param, 'faux_r_zero': mean(r < r_zero), 'faux_r_edge': z(r=r_edge) = 0}
+    :return:
+    """
+    # initialize variables
+    pr, pz, pdr = przdr
+    # -
+    # normalize pz
+    df_frames, dz_frames = [], []
+    for frame in frames:
+        df_frame = df[df['frame'] == frame].sort_values(pr)
+
+        dz_frame = df_frame[pz].mean()
+        dz_frames.append(dz_frame)
+
+        df_frame[pz] = df_frame[pz] - dz_frame
+        df_frames.append(df_frame)
+
+    df = pd.concat(df_frames)
+    # get 3D DPT limits
+    y_lim = [df[pz].abs().max() * -1.5, df[pz].abs().max() * 1.5]
+    # ---
+    # set color scale
+    vmin, vmax = np.min(dz_frames), np.max(dz_frames)
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    # clrs = [mpl.cm.coolwarm(norm(df[df['frame'] == frame][pz].min())) for frame in frames]
+    clrs = [mpl.cm.coolwarm(norm(x)) for x in dz_frames]
+    # ---
+    # plot
+    fig, ax = plt.subplots(figsize=(5.25, 2.75))
+
+    for frame, clr, dz_frame in zip(frames, clrs, dz_frames):
+        df_frame = df[df['frame'] == frame].sort_values(pr)
+        # -
+        # get voltage corresponding to this frame
+        voltage_frame = df_frame['VOLT'].values.tolist()[0]
+        # -
+        # get data
+        x = df_frame[pr].to_numpy()  # radial position
+        y = df_frame[pz].to_numpy()  #  - df_frame[pz].mean()  # axial position or axial displacement
+        # ---
+        # -
+        # plot particles w/ color bar
+        ax.scatter(x, y, s=5, color=clr, zorder=3.3,
+                   label='{}V: {} um'.format(int(np.round(voltage_frame)), np.round(dz_frame, 1)))  # , label='FPs'
+        # plot particle ID's for reference
+        plot_particle_ids = False
+        if plot_particle_ids:
+            id_ = df_frame['id'].to_numpy()
+            for xi, yi, pid in zip(x, y, id_):
+                ax.text(xi, yi, str(pid), color='black', fontsize=8)
+        # -
+        # fit parabola
+        def fit_parabola(x, a, b, c):
+            return a * x ** 2 + b * x + c
+        popt, pcov = curve_fit(fit_parabola, x, y)
+        ax.plot(x, fit_parabola(x, *popt), '-', color=clr)
+
+    # fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$\Delta z \: (\mu m)$', pad=0.025, )
+    # -
+    ax.set_xlabel(r'$r \: (\mu m)$')
+    ax.set_ylabel(r'$\Delta z_{norm} \: (\mu m)$')
+    ax.set_ylim(y_lim)
+    ax.grid(alpha=0.0625)
+    # ax.set_title('frames: {}'.format(frames))
+    ax.legend(title=r'$V_{app}: \Delta z$', loc='upper left', fontsize='x-small', ncols=len(frames))
+    plt.tight_layout()
+    plt.savefig(join(path_save, 'dz-norm-r_by_frois{}_legend-voltage.png'.format(frames)),
+                dpi=300, facecolor='w')
+    plt.close()
+    # ---
+
+
 # --------------------------------------------------------
 # 2D PLOTS
 # --------------------------------------------------------
+
+def plot_scatter_xy(df, pxy, pcolor, savepath=None, field=None,
+                         units=None, title=None, overlay_circles=False, dict_settings=None):
+    # get data
+    x, y, c = df[pxy[0]].to_numpy(), df[pxy[1]].to_numpy(), df[pcolor].to_numpy()
+
+    # plot
+    fig, ax = plt.subplots()
+    ax.scatter(x, y, c=c, s=1)
+
+    # --- format figure
+    # if no field is passed, use x-y limits.
+    if field is None:
+        field = (np.min([x.min(), y.min()]), np.max([x.max(), y.max()]))
+    # if no units, don't assume any
+    if units is None:
+        units = ('', '', '')
+    # overlay circles to show diameter of features
+    if overlay_circles:
+        # make circular patches for inner and outer radii
+        circle_edge = Circle(dict_settings['xyc_microns'], dict_settings['radius_microns'])
+        patches = [circle_edge]
+        if 'radius_hole_microns' in dict_settings.keys():
+            circle_hole = Circle(dict_settings['xyc_microns'], dict_settings['radius_hole_microns'])
+            patches.append(circle_hole)
+        pc = PatchCollection(patches, fc='none', ec='k', lw=0.5, ls='--', alpha=0.5)
+        ax.add_collection(pc)
+    ax.set(xlim=(field[0], field[1]), xticks=(field[0], field[1]),
+           ylim=(field[0], field[1]), yticks=(field[0], field[1]),
+           )
+    ax.invert_yaxis()
+    ax.set_xlabel(r'$x$ ' + units[0])
+    ax.set_ylabel(r'$y$ ' + units[1])
+    if title is not None:
+        ax.set_title(title)
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    if savepath is not None:
+            plt.savefig(savepath, dpi=300, facecolor='white', bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_quiver_xy_dxdy(df, pxydxdy, pcolor_dxdy, frames, scale=5, savepath=None, field=None,
+                         units=None, overlay_circles=False, dict_settings=None,
+                        show_interface=False, dict_surf=None, prz=None):
+    # --- setup
+    # colorscale of quiver plot (dx, dy)
+    max_dxdy = df[pcolor_dxdy].abs().quantile(0.96)  # .max()
+    cmap_quiver = 'coolwarm'
+    norm_quiver = mpl.colors.Normalize(vmin=-max_dxdy, vmax=max_dxdy)
+
+    for fr in frames:
+        df_fr = df[df['frame'] == fr]
+        # get data
+        x, y = df_fr[pxydxdy[0]].to_numpy(), df_fr[pxydxdy[1]].to_numpy()
+        dx, dy = df_fr[pxydxdy[2]].to_numpy(), df_fr[pxydxdy[3]].to_numpy()
+        c_quiver = df_fr[pcolor_dxdy].to_numpy()
+
+        # plot
+        fig, ax = plt.subplots()
+
+        q = ax.quiver(x, y, dx, dy, c_quiver, cmap=cmap_quiver, norm=norm_quiver,
+                  angles='xy',  # 'xy': arrow points from (x, y) to (x+u, y+v)
+                  pivot='tail',  # the arrow is anchored around its tail
+                  scale_units='xy',  # arrow length uses same units as (x, y)
+                  scale=1/scale,  # scale arrow length relative to data values (e.g., 0.2: arrow is 5X data units)
+                  units='width',  # arrow units depend on width of axes
+                  width=0.0035,  # shaft width in arrow units (typical starting value is 0.005 * width of axes)
+                  headwidth=3,
+                  headlength=2.5,
+                  headaxislength=2.5,
+                  minshaft=1,
+                  minlength=2,  # minimum length as multiple of shaft width, below this: plot a dot
+        )
+        ax.quiverkey(q, X=0.85, Y=1.025, U=scale, label=r'$1 \: (\mu m)$', labelpos='E', labelsep=0.05)
+        ax.scatter(x, y, s=0.5, color='k')  # c=c_scatter, s=1, cmap=cmap_scatter, norm=norm_scatter, )
+
+        # --- format figure
+        # if no field is passed, use x-y limits.
+        if field is None:
+            field = (np.min([x.min(), y.min()]), np.max([x.max(), y.max()]))
+        # if no units, don't assume any
+        if units is None:
+            units = ('', '', '')
+        # overlay zipping interface
+        if show_interface:
+            # --- calculate position of zipping interface
+            zipping_interface_r, zipping_interface_z = get_zipping_interface_rz(
+                r=df_fr[prz[0]].to_numpy(),
+                z=df_fr[prz[1]].to_numpy(),
+                surf_r=dict_surf['r'],
+                surf_z=dict_surf['z'],
+            )
+            # make circular patch
+            circle_interface = Circle(dict_settings['xyc_microns'], zipping_interface_r)
+            patches1 = [circle_interface]
+            pc1 = PatchCollection(patches1, fc='none', ec='gray', lw=0.5, ls='--', alpha=0.5)
+            ax.add_collection(pc1)
+        # overlay circles to show diameter of features
+        if overlay_circles:
+            # make circular patches for inner and outer radii
+            circle_edge = Circle(dict_settings['xyc_microns'], dict_settings['radius_microns'])
+            patches = [circle_edge]
+            if 'radius_hole_microns' in dict_settings.keys():
+                circle_hole = Circle(dict_settings['xyc_microns'], dict_settings['radius_hole_microns'])
+                patches.append(circle_hole)
+            pc = PatchCollection(patches, fc='none', ec='k', lw=0.5, ls='--', alpha=0.5)
+            ax.add_collection(pc)
+        ax.set(xlim=(field[0], field[1]), xticks=(field[0], field[1]),
+               ylim=(field[0], field[1]), yticks=(field[0], field[1]),
+               )
+        ax.invert_yaxis()
+        ax.set_xlabel(r'$x$ ' + units[0])
+        ax.set_ylabel(r'$y$ ' + units[1])
+        ax.set_title(f'Frame: {fr}')
+        ax.set_aspect('equal')
+        plt.tight_layout()
+        if savepath is not None:
+                plt.savefig(savepath.format(fr), dpi=300, facecolor='white', bbox_inches='tight')
+        else:
+            plt.show()
+        plt.close()
+
 
 def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
                     levels=15, units=None, title=None, overlay_circles=False, dict_settings=None):

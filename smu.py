@@ -25,6 +25,7 @@ def get_dict_dtypes():
         'smu_dv': float,
         'smu_step_max': int,
         'drop_pids': list,
+        'd0f_is_tid': int,
     }
     return dict_dtypes
 
@@ -43,7 +44,7 @@ def get_dict_dtype_list(data_type):
         accepted list ['int', 'str', 'eval', 'special'].
     """
     if data_type == 'int':
-        keys = ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max']
+        keys = ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max', 'd0f_is_tid']
     elif data_type == 'str':
         keys = ['filename']
     elif data_type == 'eval':
@@ -91,7 +92,7 @@ def read_settings_to_dict(filepath):
     return dict_settings
 
 
-def make_test_settings(filename, start_frame, end_frames, drop_pids, dict_settings):
+def make_test_settings(filename, start_frame, end_frames, drop_pids, d0f_is_tid, dict_settings):
     """
     Generate test settings dictionary by parsing the provided parameters and extracting
     necessary details from the filename.
@@ -105,6 +106,7 @@ def make_test_settings(filename, start_frame, end_frames, drop_pids, dict_settin
         a range of frames
     :param end_frames: Ending frame(s) for the test
     :param drop_pids: List of process IDs to exclude from the test
+    :param d0f_is_tid:
     :param dict_settings: Dictionary containing additional test parameters, such as
         source delay time associated with test types
     :return: A dictionary containing comprehensive settings to configure the test
@@ -129,6 +131,7 @@ def make_test_settings(filename, start_frame, end_frames, drop_pids, dict_settin
         'smu_dv': dv,
         'smu_step_max': step_max,
         'drop_pids': drop_pids,
+        'd0f_is_tid': d0f_is_tid,
     }
     return dict_test
 
