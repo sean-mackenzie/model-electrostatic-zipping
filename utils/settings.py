@@ -80,6 +80,8 @@ def get_dict_dtypes():
         'path_process_profiles': str,
         'fid_process_profile': int,
         'step_process_profile': int,
+        'path_model_settings': str,
+        'path_model_dZ_by_V': str,
         'path_model_strain': str,
         'path_image_overlay': str,
         'membrane_thickness': float,
@@ -107,7 +109,8 @@ def get_dict_dtype_list(data_type):
     if data_type == 'int':
         keys = ['fid', 'image_size', 'padding', 'drop_first_n_frames', 'fid_process_profile', 'step_process_profile']
     elif data_type == 'str':
-        keys = ['feature_label', 'path_process_profiles', 'path_model_strain', 'path_image_overlay']
+        keys = ['feature_label', 'path_process_profiles', 'path_image_overlay',
+                'path_model_settings', 'path_model_dZ_by_V', 'path_model_strain']
     elif data_type == 'eval':
         keys = ['source_delay_time_by_test', 'xyc_pixels', 'xyc_microns']
     elif data_type == 'special':

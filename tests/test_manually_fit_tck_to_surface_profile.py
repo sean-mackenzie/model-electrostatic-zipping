@@ -22,6 +22,10 @@ def smooth_array(x, y, smoothing, num_points, degree=3, return_tck=False):
     :param degree:
     :return:
     """
+    # make sure the arrays are sorted properly
+    y = y[np.argsort(x)]
+    x = x[np.argsort(x)]
+
     num_points = int(num_points)
     tck = splrep(x, y, s=smoothing, k=degree)
     x2 = np.linspace(x.min(), x.max(), num_points)

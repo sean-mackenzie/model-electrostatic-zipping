@@ -189,6 +189,46 @@ def plot_surface_profilometry(dict_settings, savepath):
 # 1D PLOTS
 # --------------------------------------------------------
 
+def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None):
+    # -- setup
+    # data
+    dx, dy = 'VOLT', 'dz'
+    df = df[df['STEP'] <= df['STEP'].iloc[df['VOLT'].idxmax()]]
+    # model
+    mx, my = 'U', 'z'
+    if mkey is not None:
+        dfm = dfm[dfm[mkey] == mval]
+    # data pre-processing
+    # dfm[my] = dfm[my] * -1e6
+    x = dfm[mx].to_numpy()
+    y = dfm[my].to_numpy() * -1e6
+    x = x[np.argmax(y):]
+    y = y[np.argmax(y):]
+    x0 = np.array([0])
+    y0 = np.array([0])
+    xf = np.array([df[dx].max()])
+    yf = np.array([np.min(y)])
+    x = np.concatenate((x0, x, xf))
+    y = np.concatenate((y0, y, yf))
+    # -
+    # plot
+    fig, ax = plt.subplots(figsize=(3.75, 2.5))
+    ax.plot(x, y, 'r-', label='Model')
+    ax.plot(df[dx], df[dy], 'ko', ms=1.5, label='Data')
+    ax.set_xlabel(r'$V_{app} \: (V)$')
+    ax.set_ylabel(r'$z \: (\mu m)$')
+    ax.grid(alpha=0.25)
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(
+        join(path_results, f'compare_data_to_model_{save_id}.png'),
+        dpi=300,
+        facecolor='w',
+        bbox_inches='tight',
+    )
+    plt.close()
+
+
 def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, save_id):
     # --- 3D DPT data
     pdz, pdr, pr_strain = 'dz_mean', 'dr_mean', 'r_strain'
@@ -628,7 +668,7 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
     # make "amplified radial displacement" column
     # and set color scale
     df[pdr_ampl] = df[pr] + df[pdr] * dr_ampl
-    vmax_abs = df[pdr].abs().max()
+    vmax_abs = df[pdr].abs().quantile(0.975)
     vmin, vmax = -vmax_abs, vmax_abs
     cmap = 'coolwarm'
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)

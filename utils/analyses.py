@@ -9,6 +9,10 @@ from utils import plotting, empirical, fit
 
 
 def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
+    # initialize
+    df_model_VdZ = None
+    df_model_strain = None
+
     # assign simple column labels
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
     px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
@@ -30,7 +34,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # modifiers (True False)
     eval_pids_drz = False  # True: calculate/export net-displacement per-particle in r- and z-directions
     average_max_n_positions = 20
-    plot_depth_dependent_in_plane_stretch = True
+    compare_pull_in_voltage_with_model = False # compares with model if 'path_model_dZ_by_V'
+    plot_depth_dependent_in_plane_stretch = False  # compares with model if 'path_model_strain' in dict_settings.keys()
     plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
     plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
     plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
@@ -49,9 +54,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # plot frames of interest overlay
     plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [8, 83, 84, 104, 179]
     # plot every frame
-    plot_1D_dz_by_r_by_frame_with_surface_profile = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = True
     fit_spline_to_memb = False
-    dr_ampl = 1
+    dr_ampl = 10
     if plot_1D_dz_by_r_by_frame_with_surface_profile or plot_quiver_xy_by_frame:
         surf_profile_subset = 'left_half'  # 'full', 'left_half', 'right_half'
         surf_fid_override = None
@@ -103,12 +108,14 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # ---
     if plot_pids_by_synchronous_time_voltage_monitor and 'MONITOR_VALUE' not in df.columns:
         plot_pids_by_synchronous_time_voltage_monitor = False
+
     # read model data
+    if 'path_model_dZ_by_V' in dict_settings.keys() and compare_pull_in_voltage_with_model is True:
+        df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'])
     if 'path_model_strain' in dict_settings.keys() and plot_depth_dependent_in_plane_stretch is True:
-        df_model = pd.read_excel(dict_settings['path_model_strain'])
+        df_model_strain = pd.read_excel(dict_settings['path_model_strain'])
         # df_model = df_model[df_model['dZ'] < df_model['dZ'].max() - 0.75e-6]
-    else:
-        df_model = None
+
     # -
     path_results_rep = join(path_results.format(tid), 'xy' + xym)
     path_results_per_pid = join(path_results_rep, 'per_pid')
@@ -116,6 +123,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     path_results_xy = join(path_results_rep, 'field-of-view')
     path_results_rz = join(path_results_rep, 'cross-section')
     # data slice
+    path_results_compare_dZ_by_V = join(path_results_slice, 'compare_dZ_by_V_with_model')
     path_results_depth_dependent_in_plane_stretch = join(path_results_slice, 'depth-dependent-in-plane-stretch')
     path_results_pids_by_X = join(path_results_slice, 'pids_by_X')
     # particle trajectories
@@ -139,7 +147,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # -
     # make directories
     pths = [path_results_rep, path_results_per_pid, path_results_xy, path_results_rz,
-            path_results_depth_dependent_in_plane_stretch, path_results_pids_by_X,
+            path_results_compare_dZ_by_V, path_results_depth_dependent_in_plane_stretch, path_results_pids_by_X,
             path_results_pids_by_frame, path_results_pids_dr_by_dz,
             path_results_pids_by_synchronous_time_voltage, path_results_pids_by_synchronous_time_voltage_monitor,
             path_results_pids_dz_by_voltage_hysteresis,
@@ -149,7 +157,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             path_results_1D_dznorm_by_r_by_frois,
             path_results_1D_dz_by_r_by_frame_w_surf, path_results_1D_dz_by_r_by_frois_w_surf]
     mods = [True, True, True, True,
-            plot_depth_dependent_in_plane_stretch, plot_all_pids_by_X,
+            compare_pull_in_voltage_with_model, plot_depth_dependent_in_plane_stretch, plot_all_pids_by_X,
             plot_single_pids_by_frame, plot_pids_dr_by_dz,
             plot_pids_by_synchronous_time_voltage, plot_pids_by_synchronous_time_voltage_monitor,
             plot_pids_dz_by_voltage_hysteresis,
@@ -204,7 +212,18 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # --- --- SINGLE PLOTS
 
     # --- SLICE
-    if (plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
+    if (compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
+        if compare_pull_in_voltage_with_model:
+            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.1)]['id'].unique():
+                df_pid = df[df['id'] == pid].reset_index(drop=True)
+                plotting.compare_dZ_by_V_with_model(
+                    df=df_pid,
+                    dfm=df_model_VdZ,
+                    path_results=path_results_compare_dZ_by_V,
+                    save_id=f'pid{pid}',
+                    mkey=None,  # column name
+                    mval=None,  # column value
+                )
         if plot_depth_dependent_in_plane_stretch:
             plotting.plot_depth_dependent_in_plane_stretch_from_dfd(
                 dfd=dfd0,
@@ -217,16 +236,16 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 save_id='dfd',
             )
 
-            if df_model is not None:
+            if df_model_strain is not None:
                 plotting.compare_depth_dependent_in_plane_stretch_with_model(
                     dfd=dfd0,
-                    dfm=df_model,
+                    dfm=df_model_strain,
                     path_results=path_results_depth_dependent_in_plane_stretch,
                     save_id='dfd0',
                 )
                 plotting.compare_depth_dependent_in_plane_stretch_with_model(
                     dfd=dfd,
-                    dfm=df_model,
+                    dfm=df_model_strain,
                     path_results=path_results_depth_dependent_in_plane_stretch,
                     save_id='dfd',
                 )
