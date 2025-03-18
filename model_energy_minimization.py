@@ -191,10 +191,10 @@ def solve_energy_iterative_shape_function(config, dict_actuator, dict_material,
         pf12 = np.poly1d(np.polyfit(pxn, py3n, 12))
         # pfy = pf12(pxn)
 
-        pxnew = df.dZ.to_numpy()
-        pynew = df.E_tot_i.to_numpy()
+        # pxnew = df.dZ.to_numpy()
+        # pynew = df.E_tot_i.to_numpy()
         # pfnew = np.poly1d(np.polyfit(pxnew, pynew, 12))
-        c, stats = P.polyfit(pxnew, pynew, 12, full=True)
+        # c, stats = P.polyfit(pxnew, pynew, 12, full=True)
 
 
         # spl = make_splrep(pxnew, pynew, k=4)

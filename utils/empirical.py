@@ -128,14 +128,17 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
         surf_r=surf_r,
         surf_z=surf_z,
     )
-    # 2nd-pass: refine zipping interface
-    r_fringing = np.percentile(r[r < zipping_interface_r], 75)
-    # r_midpoint = (zipping_interface_r + np.min(r)) / 2
-    zipping_interface_z = np.mean(z[(r < zipping_interface_r) & (r > r_fringing)])
-    zipping_interface_r = get_zipping_interface_r_from_z(
-        z0=zipping_interface_z,
-        surf_r=surf_r,
-        surf_z=surf_z,
-    )
+    try:
+        # 2nd-pass: refine zipping interface
+        r_fringing = np.percentile(r[r < zipping_interface_r], 75)
+        # r_midpoint = (zipping_interface_r + np.min(r)) / 2
+        zipping_interface_z = np.mean(z[(r < zipping_interface_r) & (r > r_fringing)])
+        zipping_interface_r = get_zipping_interface_r_from_z(
+            z0=zipping_interface_z,
+            surf_r=surf_r,
+            surf_z=surf_z,
+        )
+    except IndexError:
+        pass
     return zipping_interface_r, zipping_interface_z
 

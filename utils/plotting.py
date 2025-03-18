@@ -192,7 +192,7 @@ def plot_surface_profilometry(dict_settings, savepath):
 def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None):
     # -- setup
     # data
-    dx, dy = 'VOLT', 'dz'
+    dx, dy = 'VOLT', 'd0z'
     df = df[df['STEP'] <= df['STEP'].iloc[df['VOLT'].idxmax()]]
     # model
     mx, my = 'U', 'z'
@@ -407,6 +407,8 @@ def plot_single_pid_displacement_trajectory(df, pdzdr, pid, dzr_mean, path_resul
 
 def plot_single_pid_dr_by_dz(df, pdzdr, pid, path_results, only_frames=None):
     if only_frames is not None:
+        if isinstance(only_frames, (list, np.ndarray)):
+            only_frames = (only_frames[0], only_frames[-1] + 1)
         df = df[(df['frame'] > only_frames[0]) & (df['frame'] < only_frames[1])]
     pdz, pdr = pdzdr
     # -
@@ -842,7 +844,7 @@ def plot_dz_by_r_by_frois_with_surface_profile(df, przdr, dict_surf, frames, pat
     # ---
 
 
-def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_save):
+def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, dict_surf, frames, path_save):
     """
 
     :param df:
@@ -855,6 +857,9 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
     """
     # initialize variables
     pr, pz, pdr = przdr
+    pz_norm = pz + '_norm'
+    # get surface profile
+    surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
     # -
     # normalize pz
     df_frames, dz_frames = [], []
@@ -864,12 +869,12 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
         dz_frame = df_frame[pz].mean()
         dz_frames.append(dz_frame)
 
-        df_frame[pz] = df_frame[pz] - dz_frame
+        df_frame[pz_norm] = df_frame[pz] - dz_frame
         df_frames.append(df_frame)
 
     df = pd.concat(df_frames)
     # get 3D DPT limits
-    y_lim = [df[pz].abs().max() * -1.5, df[pz].abs().max() * 1.5]
+    y_lim = [df[pz_norm].abs().max() * -1.5, df[pz_norm].abs().max() * 1.5]
     # ---
     # set color scale
     vmin, vmax = np.min(dz_frames), np.max(dz_frames)
@@ -878,7 +883,7 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
     clrs = [mpl.cm.coolwarm(norm(x)) for x in dz_frames]
     # ---
     # plot
-    fig, ax = plt.subplots(figsize=(5.25, 2.75))
+    fig, ax = plt.subplots(figsize=(5.5, 2.75))
 
     for frame, clr, dz_frame in zip(frames, clrs, dz_frames):
         df_frame = df[df['frame'] == frame].sort_values(pr)
@@ -886,10 +891,18 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
         # get voltage corresponding to this frame
         voltage_frame = df_frame['VOLT'].values.tolist()[0]
         # -
+        # get position of zipping interface
+        zipping_interface_r, zipping_interface_z = get_zipping_interface_rz(
+            r=df_frame[pr].to_numpy(),
+            z=df_frame[pz].to_numpy(),
+            surf_r=surf_r,
+            surf_z=surf_z,
+        )
+        # -
         # get data
-        x = df_frame[pr].to_numpy()  # radial position
-        y = df_frame[pz].to_numpy()  #  - df_frame[pz].mean()  # axial position or axial displacement
-        # ---
+        x = df_frame[df_frame[pr] < zipping_interface_r][pr].to_numpy()  # radial position
+        y = df_frame[df_frame[pr] < zipping_interface_r][pz_norm].to_numpy()  #  - df_frame[pz].mean()  # axial position or axial displacement
+
         # -
         # plot particles w/ color bar
         ax.scatter(x, y, s=5, color=clr, zorder=3.3,
@@ -904,8 +917,10 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
         # fit parabola
         def fit_parabola(x, a, b, c):
             return a * x ** 2 + b * x + c
-        popt, pcov = curve_fit(fit_parabola, x, y)
-        ax.plot(x, fit_parabola(x, *popt), '-', color=clr)
+
+        if len(x) > 3:
+            popt, pcov = curve_fit(fit_parabola, x, y)
+            ax.plot(x, fit_parabola(x, *popt), '-', color=clr)
 
     # fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$\Delta z \: (\mu m)$', pad=0.025, )
     # -
@@ -914,7 +929,7 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, frames, path_sav
     ax.set_ylim(y_lim)
     ax.grid(alpha=0.0625)
     # ax.set_title('frames: {}'.format(frames))
-    ax.legend(title=r'$V_{app}: \Delta z$', loc='upper left', fontsize='x-small', ncols=len(frames))
+    ax.legend(title=r'$V_{app}: \Delta z$', loc='upper left', fontsize='xx-small', ncols=len(frames))
     plt.tight_layout()
     plt.savefig(join(path_save, 'dz-norm-r_by_frois{}_legend-voltage.png'.format(frames)),
                 dpi=300, facecolor='w')

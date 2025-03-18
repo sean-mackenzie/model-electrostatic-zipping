@@ -26,6 +26,7 @@ def get_dict_dtypes():
         'smu_step_max': int,
         'drop_pids': list,
         'd0f_is_tid': int,
+        'path_model_dZ_by_V': str,
     }
     return dict_dtypes
 
@@ -46,7 +47,7 @@ def get_dict_dtype_list(data_type):
     if data_type == 'int':
         keys = ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max', 'd0f_is_tid']
     elif data_type == 'str':
-        keys = ['filename']
+        keys = ['filename', 'path_model_dZ_by_V']
     elif data_type == 'eval':
         keys = ['dpt_end_frames', 'drop_pids']
     elif data_type == 'special':

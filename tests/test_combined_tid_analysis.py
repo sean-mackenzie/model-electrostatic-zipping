@@ -5,10 +5,34 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
+def make_ivac_test_matrix(read_iv, filepath_save):
+    files = [f for f in os.listdir(read_iv) if f.startswith('tid')]
+    res = []
+    for f in files:
+        tid = int(f.split('_')[0].split('tid')[1])
+        test_type = f.split('_')[1].split('test')[1]
+        output_volt = f.split('_')[2].split('V')[0]
+        awg_freq = f.split('_')[3].split('Hz')[0]
+        awg_wave = f.split('_')[3].split('Hz')[1]
+        res.append([tid, test_type, output_volt, awg_freq, awg_wave])
+    df = pd.DataFrame(res, columns=['tid', 'test_type', 'output_volt', 'awg_freq', 'awg_wave'])
+    df = df.astype({'tid': int, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str})
+    df.to_excel(filepath_save, index=False)
+    return df
+
+def get_tids_from_iv_matrix(df_iv_matrix, dict_test_group):
+    # example dict_test_group: {'test_type': 'STD1', 'output_volt': 230, 'awg_wave': 'SQU'}
+    df = df_iv_matrix.copy()
+    for k, v in dict_test_group.items():
+        df = df[df[k] == v]
+    tids = df['tid'].unique()
+    return tids
+
+
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03072025_W12-D1_C19-30pT_20+10nmAu'
+    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -21,16 +45,24 @@ if __name__ == "__main__":
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024'
     BASE_DIR = join(ROOT_DIR, 'zipper_paper/Testing/Zipper Actuation', TEST_CONFIG)
     SAVE_DIR = join(BASE_DIR, 'analyses')
-    SAVE_COORDS = join(SAVE_DIR, 'coords')
+    READ_COORDS = join(SAVE_DIR, 'coords')
     SAVE_COMBINED = join(SAVE_DIR, 'combined')
     SECOND_PASS_XYM = 'g'  # 'g' or 'm': use sub-pixel or discrete in-plane localization method
-
 
     # make dirs
     for pth in [SAVE_COMBINED]:
         if not os.path.exists(pth):
             os.makedirs(pth)
-    # -
+    # make iv test matrix
+    READ_IV = join(BASE_DIR, 'I-V', 'xlsx')
+    FP_IV_MATRIX = join(SAVE_COMBINED, 'iv_test_matrix.xlsx')
+    if not os.path.exists(FP_IV_MATRIX):
+        DF_IV_MATRIX = make_ivac_test_matrix(read_iv=READ_IV, filepath_save=FP_IV_MATRIX)
+    else:
+        DF_IV_MATRIX = pd.read_excel(FP_IV_MATRIX)
+        DF_IV_MATRIX = DF_IV_MATRIX.astype({'tid': int, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str})
+
+    # ---
 
     # ---
 
@@ -41,27 +73,27 @@ if __name__ == "__main__":
             os.makedirs(SAVE_SUB_ANALYSIS)
 
         SAVE_IDS = [
-            'VAR3 300V',
-            '300V 350Hz',
-            '300V 250Hz',
-            'VAR3 250V',
+            'STD2 230V',
+            'STD3 230V',
+            'VAR3 230V LowFreq',
+            'STD1SIN 230V',
         ]
         TIDSS = [
-            [29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
-            [40, 41, 42],
-            [43, 44, 45],
-            [49, 50, 51, 52, 53],
+            [53, 20, 24, 50],
+            [54, 32, 21, 25, 51],
+            [35, 34, 33, 41],
+            [43, 42, 40],
         ]
         LBLSS = [
-            [1000, 500, 1500, 250, 400, 350, 300, 325, 1000, 200, 150],
-            ['25%', '35%', '45%'],
-            ['25%', '35%', '45%'],
-            [500, 250, 200, 150, 100],
+            [0.25, 1, 10, 50],
+            [0.25, 0.25, 1, 10, 50],
+            [100, 150, 250, 1000],
+            [250, 500, 750],
         ]
-        LEGEND_TITLES = ['Frequency', 'Duty Cycle', 'Duty Cycle', 'Frequency']
+        LEGEND_TITLES = ['Freq (kHz)', 'Freq (kHz)', 'Freq (Hz)', 'Freq (mHz)']
 
-        PIDS = [27, 32, 33, 31, 30, 28, 35, 26, 34, 25, 14, 22]
-        px, py = 't_sync', 'dz'
+        PIDS = None  # [1, 6, 12, 14, 17, 18, 20, 22, 27]  # None: plot all pids
+        px, py1, py2 = 't_sync', 'd0z', 'd0rg'
 
         for SAVE_ID, TIDS, LBLS, LGND_TTL in zip(SAVE_IDS, TIDSS, LBLSS, LEGEND_TITLES):
 
@@ -71,23 +103,32 @@ if __name__ == "__main__":
 
             DFS = {}
             for TID in TIDS:
-                DF = pd.read_excel(join(SAVE_COORDS, 'tid{}_merged-coords-volt.xlsx'.format(TID)))
-                DF = DF[DF['id'].isin(PIDS)]
+                DF = pd.read_excel(join(READ_COORDS, 'tid{}_merged-coords-volt.xlsx'.format(TID)))
+                if PIDS is not None:
+                    DF = DF[DF['id'].isin(PIDS)]
+                else:
+                    PIDS = DF['id'].unique()
                 DFS[TID] = DF
 
             for PID in PIDS:
                 # sort TIDS and LBLS by LBLS
                 LBLS, TIDS = zip(*sorted(zip(LBLS, TIDS)))
 
-                fig, ax = plt.subplots(figsize=(7, 3.5))
+                fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(7, 5))
                 for TID, LBL in zip(TIDS, LBLS):
                     DF = DFS[TID]
                     DF_PID = DF[DF['id'] == PID]
-                    ax.plot(DF_PID[px], DF_PID[py], '-', lw=0.5, label=LBL)
-                ax.set_xlabel(r'$t \: (s)$')
-                ax.set_ylabel(r'$\Delta z \: (\mu m)$')
-                ax.grid(alpha=0.2)
-                ax.legend(loc='upper left', bbox_to_anchor=(1, 1), title=LGND_TTL)
+                    ax1.plot(DF_PID[px], DF_PID[py1], '-', lw=0.5, label=LBL)
+                    ax2.plot(DF_PID[px], DF_PID[py2], '-', lw=0.5, label=LBL)
+
+                ax1.set_ylabel(r'$\Delta_{o} z \: (\mu m)$')
+                ax1.grid(alpha=0.2)
+                ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), title=LGND_TTL, fontsize='x-small')
+
+                ax2.set_ylabel(r'$\Delta_{o} r \: (\mu m)$')
+                ax2.grid(alpha=0.2)
+                ax2.set_xlabel(r'$t \: (s)$')
+
                 plt.tight_layout()
                 plt.savefig(join(SAVE_SUB_SUB_ANALYSIS, 'pid{}.png'.format(PID)),
                             dpi=300, facecolor='w', bbox_inches='tight')

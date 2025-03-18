@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.special import erf
 import matplotlib.pyplot as plt
 
-from scipy.interpolate import splrep, BSpline
+from scipy.interpolate import splrep, BSpline, make_splrep, splev, splrep, splder, sproot
 
 
 def smooth_array(x, y, smoothing, num_points, degree=3, return_tck=False):
@@ -33,6 +33,32 @@ def smooth_array(x, y, smoothing, num_points, degree=3, return_tck=False):
     if return_tck:
         return x2, y2, tck
     return x2, y2
+
+def plot_surface_profile_2nd_derivative(x, y, path_save, smoothing=100):
+    # make sure the arrays are sorted properly
+    y = y[np.argsort(x)]
+    x = x[np.argsort(x)]
+
+    tck = splrep(x, y, s=smoothing, k=5)
+    ddy = BSpline(*tck).derivative(nu=2)(x)
+    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(5, 4))
+    ax1.plot(x, y, 'k-', lw=0.75, label='Surface profile')
+    ax1.plot(x, BSpline(*tck)(x), 'r--', lw=0.75, label='Fitted spline')
+    ax1.set_ylabel('z (um)')
+    ax1.grid(alpha=0.25)
+    ax1.legend()
+
+    ax2.plot(x, ddy, 'g-', lw=1, label='2nd derivative')
+    ax2.grid(alpha=0.25)
+    ax2.legend()
+    ax2.set_xlabel('r (um)')
+
+    plt.tight_layout()
+    if path_save is not None:
+        plt.savefig(join(path_save, 'surface_profile_2nd_derivative.png'), dpi=300,
+                    facecolor='w', bbox_inches='tight')
+    else:
+        plt.show()
 
 
 def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3, path_save=None):
@@ -76,7 +102,11 @@ def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3,
                     facecolor='w', bbox_inches='tight')
     plt.show()
 
+    plot_surface_profile_2nd_derivative(x=rx, y=ry, path_save=path_save, smoothing=1000)
+
     return tck
+
+
 
 
 if __name__ == '__main__':

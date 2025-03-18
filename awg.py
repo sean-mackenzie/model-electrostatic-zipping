@@ -27,6 +27,7 @@ def get_dict_dtypes():
         'animate_frames': eval,
         'drop_pids': list,
         'd0f_is_tid': int,
+        'path_model_dZ_by_V': str,
         'monitor_time_scale_factor': float,
         'save_dir': str,
         'save_id': str,
@@ -99,6 +100,7 @@ def get_dict_dtype_list(data_type):
     elif data_type == 'str':
         keys = ['filename',
                 'iv_acdc',
+                'path_model_dZ_by_V',
                 'save_dir',
                 'save_id',
                 'test_type',
@@ -187,8 +189,8 @@ def make_test_settings(filename, settings_handler_dict, dict_settings):
     dict_test = read_settings_to_dict(filepath=join(settings_handler_dict['read_iv_dir'], filename))
 
     if dict_test['test_type'] == 'STD1':
-        dpt_end_frames = (84, 87)  # exactly: (83, 88) but not including 83 and 88
-        animate_frames = (15, 190)
+        dpt_end_frames = (100, 105)  # exactly: (83, 88) but not including 83 and 88
+        animate_frames = (15, 215)
     elif dict_test['test_type'] == 'STD2':
         dpt_end_frames = (78, 89)  # exactly: (76, 92) but not including 76 and 92
         animate_frames = (25, 150)

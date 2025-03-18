@@ -41,20 +41,21 @@ def plot_sweep_z_by_v(df_roots, key, vals, path_save, save_id, key_title=None):
 if __name__ == '__main__':
     # ---
     """ NOTE: these values are computed via Bulge Test and/or test_calculate_pre_stretch_from_residual_stress.py."""
-    MEMB_ID = 'C9-0pT'
-    MEMB_YOUNGS_MODULUS_BULGE_TEST = 2.96e6
-    MEMB_RESIDUAL_STRESS_BULGE_TEST = 30e3
-    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.0
-    EXPERIMENTAL_PRE_STRETCH_MEASURED = 'did not measure'
-    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.005
+    MEMB_ID = '20250302_C17-20pT-25nmAu'
+    MEMB_YOUNGS_MODULUS_BULGE_TEST = 1e6  # Pa
+    MEMB_RESIDUAL_STRESS_BULGE_TEST = 345.5e3  # Pa
+    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.2
+    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.252
+    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 389e3  # Pa
+    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.218
     GENT_MODEL_J_MEMB = 80.4
 
     # ---
 
     # general inputs
-    TEST_CONFIG = '01102025_W13-D1_C9-0pT'
+    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
     WID = 13
-    TID = 1
+    TID = 33
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
     BASE_DIR = join(ROOT_DIR, TEST_CONFIG)
     ANALYSES_DIR = join(BASE_DIR, 'analyses')
@@ -68,48 +69,49 @@ if __name__ == '__main__':
 
 
     """ NOTE: The model actually uses these values here. You can play with these values. """
-    MODEL_USE_PRE_STRETCH = 1.00845  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
+    MODEL_USE_PRE_STRETCH = 1.252  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
+    MODEL_USE_YOUNGS_MODULUS = 1.1e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
     MODEL_USE_THICKNESS_DIELECTRIC = 2.1e-6
     MODEL_USE_SURFACE_ROUGHNESS = 1e-9
 
-    FID_OVERRIDE = 9
-    SURFACE_PROFILE_SUBSET = 'left_half'  # 'full', 'left_half', 'right_half'
+    FID_OVERRIDE = 0
+    SURFACE_PROFILE_SUBSET = 'right_half'  # 'full', 'left_half', 'right_half'
 
     NUM_SEGMENTS = 2000  # NOTE: this isn't necessarily the final number of solver segments
-    COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
+    COMPUTE_DEPTH_DEPENDENT_STRAIN = False  # True False
 
     if FID_OVERRIDE is None:
         FID = DICT_SETTINGS['fid_process_profile']
     else:
         FID = FID_OVERRIDE
 
-    SAVE_ID = 'wid{}_fid{}_test1'.format(WID, FID)
-    SAVE_DIR = join(SAVE_DIR, 'fid{}_pre_stretch={}'.format(FID, MODEL_USE_PRE_STRETCH))
+    SAVE_ID = 'wid{}_fid{}'.format(WID, FID)
+    SAVE_DIR = join(SAVE_DIR, 'fid{}_sweep-pre-stretch'.format(FID, MODEL_USE_PRE_STRETCH))
 
-    SWEEP_VOLTAGES = np.arange(25, 150, 0.5)
-    SWEEP_PARAM = 'FINAL'
+    SWEEP_VOLTAGES = np.arange(100, 350, 1)
+    SWEEP_PARAM = 'pre_stretch'
 
     if SWEEP_PARAM == 'E':
         SWEEP_K = 'E'
-        SWEEP_VS = [2e6, 2.5e6, 3e6, 4e6]
+        SWEEP_VS = np.array([1, 1.1, 1.2, 1.3]) * 1e6
         SWEEP_K_FIG = "E (MPa)"
-        SWEEP_VS_FIGS = [2, 2.5, 3, 4]
+        SWEEP_VS_FIGS = np.round(SWEEP_VS * 1e-6, 1)
         SWEEP_K_XLSX = 'E'
-        SWEEP_VS_XLSX = ['2MPa', '2.5MPa', '3MPa', '4MPa']
+        SWEEP_VS_XLSX = [f'{x}MPa' for x in SWEEP_VS_FIGS]
     elif SWEEP_PARAM == 'pre_stretch':
         SWEEP_K = 'pre_stretch'
-        SWEEP_VS = [1.005, 1.0075, 1.0085]
+        SWEEP_VS = [1.2, 1.225, 1.25]
         SWEEP_K_FIG = "Pre-stretch"
         SWEEP_VS_FIGS = SWEEP_VS
         SWEEP_K_XLSX = 'pre_stretch'
         SWEEP_VS_XLSX = SWEEP_VS
     elif SWEEP_PARAM == 'FINAL':
         SWEEP_K = 'E'
-        SWEEP_VS = [MEMB_YOUNGS_MODULUS_BULGE_TEST]
+        SWEEP_VS = [MODEL_USE_YOUNGS_MODULUS]
         SWEEP_K_FIG = "E (MPa)"
-        SWEEP_VS_FIGS = [np.round(MEMB_YOUNGS_MODULUS_BULGE_TEST / 1e6, 2)]
+        SWEEP_VS_FIGS = [np.round(MODEL_USE_YOUNGS_MODULUS / 1e6, 2)]
         SWEEP_K_XLSX = 'E'
-        SWEEP_VS_XLSX = ['{} MPa'.format(np.round(MEMB_YOUNGS_MODULUS_BULGE_TEST / 1e6, 2))]
+        SWEEP_VS_XLSX = ['{} MPa'.format(np.round(MODEL_USE_YOUNGS_MODULUS / 1e6, 2))]
     else:
         raise ValueError('Invalid sweep parameter: {}'.format(SWEEP_PARAM))
 
@@ -139,10 +141,10 @@ if __name__ == '__main__':
     UNITS = 1e-6
 
     # ---
-    PRE_PROCESS_TCK = True
+    PRE_PROCESS_TCK = False
     if PRE_PROCESS_TCK or not os.path.exists(FP_TCK):
         # --- --- MANUALLY FIT TCK AND EXPORT
-        SMOOTHING = 0.0  # 50
+        SMOOTHING = 10.0  # 50
         NUM_POINTS = 500
         DEGREE = 3
         DICT_TCK_SETTINGS = {
@@ -184,7 +186,7 @@ if __name__ == '__main__':
     t_diel = MODEL_USE_THICKNESS_DIELECTRIC
 
     # material
-    Youngs_Modulus = MEMB_YOUNGS_MODULUS_BULGE_TEST
+    Youngs_Modulus = MODEL_USE_YOUNGS_MODULUS
     # mu_memb = Youngs_Modulus / 3  # 0.42e6
     J_memb = GENT_MODEL_J_MEMB  # 80.4
     eps_r_memb = 3.0
@@ -210,6 +212,7 @@ if __name__ == '__main__':
         'memb_residual_stress_bulge_test': MEMB_RESIDUAL_STRESS_BULGE_TEST,
         'experimental_pre_stretch_nominal': EXPERIMENTAL_PRE_STRETCH_NOMINAL,
         'experimental_pre_stretch_measured': EXPERIMENTAL_PRE_STRETCH_MEASURED,
+        'gent_model_computed_residual_stress_from_pre_stretch_measured': GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED,
         'gent_model_computed_pre_stretch': GENT_MODEL_COMPUTED_PRE_STRETCH,
         'gent_model_j_memb': GENT_MODEL_J_MEMB,
         'units': UNITS,
@@ -339,7 +342,7 @@ if __name__ == '__main__':
         df_[k] = v
         df_s.append(df_)
     df_s = pd.concat(df_s)
-    df_s.to_excel(join(SAVE_DIR, SAVE_ID + '_sweep-{}_z-by-v.xlsx'.format(k)), index=False)
+    df_s.to_excel(join(SAVE_DIR, SAVE_ID + '_model_z-by-v.xlsx'), index=False)
 
     plot_sweep_z_by_v(df_roots, key=k, vals=vs_fig, path_save=SAVE_DIR, save_id=SAVE_ID, key_title=k_fig)
 
@@ -400,7 +403,7 @@ if __name__ == '__main__':
             df['disp_r_microns'] = (df['x_i'] * (df['strain_xy'] - 1)) / 2 * 1e6  # divide by 2 = radial displacement
 
             if export_excel_strain:
-                df.to_excel(join(path_save, SAVE_ID + '_strain-by-z_{}_{}.xlsx'.format(k_xlsx, vs_xlsx[j])))
+                df.to_excel(join(path_save, SAVE_ID + '_model_strain-by-z.xlsx'))
 
             # plot
             if MAX_DZ_FOR_STRAIN_PLOT is not None:

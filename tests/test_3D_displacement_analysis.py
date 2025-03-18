@@ -1,5 +1,6 @@
 import os
 from os.path import join
+import numpy as np
 import pandas as pd
 
 import smu, awg, dpt
@@ -13,9 +14,9 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01102025_W13-D1_C9-0pT'
-    TID = 1
-    IV_ACDC = 'DC'
+    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
+    TIDS = [30, 33]
+    IV_ACDC = 'AC'
 
     # -
     # SETTINGS (True False)
@@ -33,18 +34,18 @@ if __name__ == "__main__":
     # ---
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (0, 8), (195, 205)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     USE_GENERIC_DC_TEST_SETTINGS = False  # in rare cases, do not parse FN_IV filename and instead use generic settings
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    D0F_IS_TID = 2  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
     # ------------------------------------------------------------------------------------------------------------------
-    TIDS = [1]
+
     for TID in TIDS:
         # ---
         # FILEPATHS
@@ -58,6 +59,7 @@ if __name__ == "__main__":
         # SAVE_COORDS_W_PIXELS = join(SAVE_COORDS, 'pixels')
         PATH_REPRESENTATIVE = join(SAVE_DIR, 'representative_test{}')
         # PATH_REPRESENTATIVE = join(SAVE_DIR, 'net-d0zr_per_pid')
+
         # -
         # settings
         FP_SETTINGS = join(SAVE_SETTINGS, 'dict_settings.xlsx')

@@ -29,35 +29,38 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     frames_drdz = frames_with_surface_profile
     # -
     only_pids = []  # if None, then plot all pids
-    not_pids = [18]  # [], then plot all pids
+    not_pids = []  # [], then plot all pids
     # -
     # modifiers (True False)
-    eval_pids_drz = False  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 20
-    compare_pull_in_voltage_with_model = False # compares with model if 'path_model_dZ_by_V'
+    eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
+    average_max_n_positions = 10
+    # --- --- SLICE
+    compare_pull_in_voltage_with_model = False # compares with model if 'path_model_dZ_by_V' if 'path_model_...'
+    model_mkey, model_mval = None, None  # 'E', 1.1e6
     plot_depth_dependent_in_plane_stretch = False  # compares with model if 'path_model_strain' in dict_settings.keys()
     plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
-    plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_dr_by_dz = False
-    plot_pids_by_synchronous_time_voltage = False
-    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
-    plot_pids_dz_by_voltage_hysteresis = False
-    # ---
-    # --- --- PLOT X-Y DISPLACEMENTS: FIELD OF VIEW
+    # --- --- FIELD OF VIEW
     plot_scatter_xy_by_frame = False
-    plot_quiver_xy_by_frame = False
+    plot_quiver_xy_by_frame = True
+    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    # --- --- PIDS
+    plot_single_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
+    plot_pids_dr_by_dz = True
+    plot_pids_by_synchronous_time_voltage = True
+    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
+    plot_pids_dz_by_voltage_hysteresis = False
     # -
-    # --- --- PLOT R-Z DISPLACEMENTS: CROSS-SECTION VIEW
+    # --- --- PLOT R-Z DISPLACEMENTS: CROSS-SECTION VIEW (True, False)
     # plot normalized profile to visualize bending of suspended membrane
-    plot_normalized_membrane_profile, frois_norm_profile = False, [8, 50, 70]
+    plot_normalized_membrane_profile, frois_norm_profile = False, [15, 53, 71, 135]
     # plot frames of interest overlay
-    plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [8, 83, 84, 104, 179]
+    plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [15, 53, 71, 85]
     # plot every frame
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
     fit_spline_to_memb = False
-    dr_ampl = 10
-    if plot_1D_dz_by_r_by_frame_with_surface_profile or plot_quiver_xy_by_frame:
+    dr_ampl = 1
+    if (plot_quiver_xy_by_frame or plot_1D_dz_by_r_by_frame_with_surface_profile or
+            plot_normalized_membrane_profile or plot_1D_dz_by_r_by_frois_with_surface_profile):
         surf_profile_subset = 'left_half'  # 'full', 'left_half', 'right_half'
         surf_fid_override = None
         surf_shift_r, surf_shift_z, surf_scale_z = 0, 0, 1
@@ -84,9 +87,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         dict_fit_memb = None
 
     # -
-
     # ---
-
     plot_1D_z_by_r_by_frame = False
     plot_1D_dz_by_r_by_frame = False
     plot_2D_z_by_frame = False
@@ -110,8 +111,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         plot_pids_by_synchronous_time_voltage_monitor = False
 
     # read model data
-    if 'path_model_dZ_by_V' in dict_settings.keys() and compare_pull_in_voltage_with_model is True:
-        df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'])
+    if compare_pull_in_voltage_with_model:
+        if 'path_model_dZ_by_V' in dict_test.keys():
+            df_model_VdZ = pd.read_excel(dict_test['path_model_dZ_by_V'])
+            print("TEST SETTINGS OVERRIDING SETTINGS FOR 'path_model_dZ_by_V'")
+        elif 'path_model_dZ_by_V' in dict_settings.keys():
+            df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'])
     if 'path_model_strain' in dict_settings.keys() and plot_depth_dependent_in_plane_stretch is True:
         df_model_strain = pd.read_excel(dict_settings['path_model_strain'])
         # df_model = df_model[df_model['dZ'] < df_model['dZ'].max() - 0.75e-6]
@@ -214,16 +219,17 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # --- SLICE
     if (compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
         if compare_pull_in_voltage_with_model:
-            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.1)]['id'].unique():
+            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.125)]['id'].unique():
                 df_pid = df[df['id'] == pid].reset_index(drop=True)
                 plotting.compare_dZ_by_V_with_model(
                     df=df_pid,
                     dfm=df_model_VdZ,
                     path_results=path_results_compare_dZ_by_V,
                     save_id=f'pid{pid}',
-                    mkey=None,  # column name
-                    mval=None,  # column value
+                    mkey=model_mkey,  # column name
+                    mval=model_mval,  # column value
                 )
+
         if plot_depth_dependent_in_plane_stretch:
             plotting.plot_depth_dependent_in_plane_stretch_from_dfd(
                 dfd=dfd0,
@@ -250,13 +256,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                     save_id='dfd',
                 )
 
-
         if plot_all_pids_by_X:
             for X in Xs:
                 plotting.plot_all_pids_displacement_trajectory(
                     df=df,
                     px=X,
-                    pdzdr=(pdz, pdr),
+                    pdzdr=(pd0z, pd0r),
                     path_results=path_results_pids_by_X,
                 )
 
@@ -427,18 +432,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # ---
 
     # --- --- ONE PLOT PER FRAME
-    if plot_1D_dz_by_r_by_frame_with_surface_profile:
-        # --- plot surface profile w/ 3D DPT coords
-        plotting.plot_dz_by_r_by_frame_with_surface_profile(
-            df,
-            przdr=przdr,
-            dict_surf=dict_surface_profilometry,
-            frames=frames_with_surface_profile,
-            path_save=path_results_1D_dz_by_r_by_frame_w_surf,
-            dict_fit=dict_fit_memb,
-            dr_ampl=dr_ampl,
-            show_interface=True
-        )
+
 
         # --- plot 2D heat maps
         plot_2d_heatmaps_per_frame = False
@@ -520,6 +514,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # plotting.plot_multi_single_pid_displacement_trajectory(df_, px=X, py=pdz, path_results=path_results_pids_by_X)
 
     if (
+            plot_1D_dz_by_r_by_frame_with_surface_profile or
             plot_1D_dz_by_r_by_frois_with_surface_profile or
             plot_normalized_membrane_profile
     ):
@@ -541,8 +536,22 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             plotting.plot_dz_by_r_by_frois_normalize_membrane_profile(
                 df=df_frois,
                 przdr=przdr,
+                dict_surf=dict_surface_profilometry,
                 frames=frois_norm_profile,
                 path_save=path_results_1D_dznorm_by_r_by_frois,
+            )
+
+        if plot_1D_dz_by_r_by_frame_with_surface_profile:
+            # --- plot surface profile w/ 3D DPT coords
+            plotting.plot_dz_by_r_by_frame_with_surface_profile(
+                df,
+                przdr=przdr,
+                dict_surf=dict_surface_profilometry,
+                frames=frames_with_surface_profile,
+                path_save=path_results_1D_dz_by_r_by_frame_w_surf,
+                dict_fit=dict_fit_memb,
+                dr_ampl=dr_ampl,
+                show_interface=True
             )
 
 
