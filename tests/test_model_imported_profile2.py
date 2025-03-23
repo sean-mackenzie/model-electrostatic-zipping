@@ -39,23 +39,67 @@ def plot_sweep_z_by_v(df_roots, key, vals, path_save, save_id, key_title=None):
 
 
 if __name__ == '__main__':
+    """
+    NOTES ON MEMBRANE'S ESTIMATED PARAMETERS WHERE NO DIRECT MEASUREMENTS ARE AVAILABLE:
+        1. C22-20pT_20nmAu (i.e., before the 2nd deposition):
+            Pre-Stretch:
+                * measured 1.263
+            Bulge Test (must use comparable dataset):
+                * C22-20pT_20+10nmAu (pre-stretch = 1.263):
+                    A. E = 1 MPa, residual stress = 320 kPa
+                    B. E = 14 MPa, residual stress = 310 kPa
+                * C17-20pT-25nmAu (pre-stretch = 1.25):
+                    A. E = 1 MPa, residual stress = 345-375 kPa
+                    B. E = 23 MPa, residual stress = 305 kPa
+                * C7-20pT-20nmAu (pre-stretch was not measured):        (these parameters were used for DC tests)
+                    A. E = 1 MPa, residual stress = 304 kPa
+            --> Conclusion:
+                I'm going to use C17-20pT: E = 1 MPa, residual stress = 350 kPa to start.
+        2. C21-15pT_30nmAu:
+            Pre-Stretch: measured 1.159
+            Bulge Test: 
+                A. E = 1 MPa, residual stress = 250 kPa     (n = 4)         (USED FOR MODELING)
+                B. E = 10.4 MPa, residual stress = 220 kPa  (n = 1)         (DID NOT USE FOR MODELING)
+        3. C15-15pT-25nmAu:
+            Pre-stretch: 
+                * measured 1.146
+            Bulge Test:
+                A. E between 45-75 MPa, residual stress between 160-220 kPa... 
+                    NOTE: for the measured pre-stretch, E=1 MPa, stress=220 kPa: 
+                        Gent stress = 245 kPa, Gent pre-stretch = 1.129
+                
+                so, probably best to use a comparable.
+                    Comparable bulge tests:
+                        * C14-15pT-20nmAu (pre-stretch = 1.126):
+                            A. E = 1 MPa, residual stress = 263 kPa
+                        * C18-30pT-25+10nmAu (pre-stretch = 1.135):
+                            Did not measure bulge test. 
+                        * C19-30pT-20nm+10nmAu (pre-stretch = 1.131):
+                            A. E = 1 MPa, residual stress = 265 kPa     (n = 2)
+                            B. E = 10 MPa, residual stress = 262 kPa    (n = 1)
+                        * C21-15pT-30nmAu (pre-stretch = 1.159):
+                            A. E = 1 MPa, residual stress = 250 kPa     (n = 4)
+            --> Conclusion:
+                I'm going to use the same parameters as C21-15pT-30nmAu: E = 1 MPa, residual stress = 250 kPa to start.
+        
+    """
     # ---
-    """ NOTE: these values are computed via Bulge Test and/or test_calculate_pre_stretch_from_residual_stress.py."""
-    MEMB_ID = '20250302_C17-20pT-25nmAu'
+    """ NOTE: these values are computed via Bulge Test and/or calculate_pre_stretch_from_residual_stress.py."""
+    MEMB_ID = 'C19-30pT_20+10nmAu'
     MEMB_YOUNGS_MODULUS_BULGE_TEST = 1e6  # Pa
-    MEMB_RESIDUAL_STRESS_BULGE_TEST = 345.5e3  # Pa
-    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.2
-    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.252
-    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 389e3  # Pa
-    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.218
-    GENT_MODEL_J_MEMB = 80.4
+    MEMB_RESIDUAL_STRESS_BULGE_TEST = 260e3  # Pa
+    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.30
+    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.131
+    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 223e3  # Pa
+    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.156
+    GENT_MODEL_J_MEMB = 54  # Elastosil 200 um thick: 54 or 16; Maffli et al. NuSil: 80.4
 
     # ---
 
     # general inputs
-    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
-    WID = 13
-    TID = 33
+    TEST_CONFIG = '03072025_W11-A1_C19-30pT_20+10nmAu'
+    WID = 11
+    TID = 1
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
     BASE_DIR = join(ROOT_DIR, TEST_CONFIG)
     ANALYSES_DIR = join(BASE_DIR, 'analyses')
@@ -69,16 +113,20 @@ if __name__ == '__main__':
 
 
     """ NOTE: The model actually uses these values here. You can play with these values. """
-    MODEL_USE_PRE_STRETCH = 1.252  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
-    MODEL_USE_YOUNGS_MODULUS = 1.1e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
+    MODEL_USE_PRE_STRETCH = 1.13  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
+    MODEL_USE_YOUNGS_MODULUS = 1e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
     MODEL_USE_THICKNESS_DIELECTRIC = 2.1e-6
     MODEL_USE_SURFACE_ROUGHNESS = 1e-9
 
-    FID_OVERRIDE = 0
-    SURFACE_PROFILE_SUBSET = 'right_half'  # 'full', 'left_half', 'right_half'
+    FID_OVERRIDE = None  # None
+    SURFACE_PROFILE_SUBSET = 'left_half'  # 'left_half', 'right_half', 'full'
+    TCK_SMOOTHING = 0.0
+    SWEEP_PARAM = 'pre_stretch'
+    DICT_SETTINGS_RADIUS = DICT_SETTINGS['radius_microns']
+    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 0
 
-    NUM_SEGMENTS = 2000  # NOTE: this isn't necessarily the final number of solver segments
-    COMPUTE_DEPTH_DEPENDENT_STRAIN = False  # True False
+    NUM_SEGMENTS = 1500  # NOTE: this isn't necessarily the final number of solver segments
+    COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
 
     if FID_OVERRIDE is None:
         FID = DICT_SETTINGS['fid_process_profile']
@@ -86,24 +134,32 @@ if __name__ == '__main__':
         FID = FID_OVERRIDE
 
     SAVE_ID = 'wid{}_fid{}'.format(WID, FID)
-    SAVE_DIR = join(SAVE_DIR, 'fid{}_sweep-pre-stretch'.format(FID, MODEL_USE_PRE_STRETCH))
+    SAVE_DIR = join(SAVE_DIR, 'fid{}_E{}_PS{}_{}_s={}_sweep-{}'.format(FID,
+                                                                       np.round(MODEL_USE_YOUNGS_MODULUS *1e-6, 1), MODEL_USE_PRE_STRETCH,
+                                                                       SURFACE_PROFILE_SUBSET, TCK_SMOOTHING, SWEEP_PARAM))
 
-    SWEEP_VOLTAGES = np.arange(100, 350, 1)
-    SWEEP_PARAM = 'pre_stretch'
+    SWEEP_VOLTAGES = np.arange(75, 500, 1)
 
     if SWEEP_PARAM == 'E':
         SWEEP_K = 'E'
-        SWEEP_VS = np.array([1, 1.1, 1.2, 1.3]) * 1e6
+        SWEEP_VS = np.array([1, 1.1, 2.0, 3.0]) * 1e6
         SWEEP_K_FIG = "E (MPa)"
         SWEEP_VS_FIGS = np.round(SWEEP_VS * 1e-6, 1)
         SWEEP_K_XLSX = 'E'
         SWEEP_VS_XLSX = [f'{x}MPa' for x in SWEEP_VS_FIGS]
     elif SWEEP_PARAM == 'pre_stretch':
         SWEEP_K = 'pre_stretch'
-        SWEEP_VS = [1.2, 1.225, 1.25]
+        SWEEP_VS = [1.1, 1.131, 1.156]
         SWEEP_K_FIG = "Pre-stretch"
         SWEEP_VS_FIGS = SWEEP_VS
         SWEEP_K_XLSX = 'pre_stretch'
+        SWEEP_VS_XLSX = SWEEP_VS
+    elif SWEEP_PARAM == 'Jm':
+        SWEEP_K = 'Jm'
+        SWEEP_VS = [16, 54, 80]
+        SWEEP_K_FIG = "Jm"
+        SWEEP_VS_FIGS = SWEEP_VS
+        SWEEP_K_XLSX = 'Jm'
         SWEEP_VS_XLSX = SWEEP_VS
     elif SWEEP_PARAM == 'FINAL':
         SWEEP_K = 'E'
@@ -126,7 +182,7 @@ if __name__ == '__main__':
     FP_TCK = join(READ_TCK, FN_TCK)
 
     # surface profile
-    INCLUDE_THROUGH_HOLE = False
+    INCLUDE_THROUGH_HOLE = True
     DF_SURFACE = empirical.read_surface_profile(
         DICT_SETTINGS,
         subset='full',  # this should always be 'full', because profile will get slice during tck
@@ -136,41 +192,43 @@ if __name__ == '__main__':
 
     # specific inputs
     DEPTH = DF_SURFACE['z'].abs().max()
-    RADIUS = DICT_SETTINGS['radius_microns'] + 20
+    RADIUS = MODEL_USE_RADIUS
     MAX_DZ_FOR_STRAIN_PLOT = DEPTH - 2
     UNITS = 1e-6
 
     # ---
-    PRE_PROCESS_TCK = False
-    if PRE_PROCESS_TCK or not os.path.exists(FP_TCK):
-        # --- --- MANUALLY FIT TCK AND EXPORT
-        SMOOTHING = 10.0  # 50
-        NUM_POINTS = 500
-        DEGREE = 3
-        DICT_TCK_SETTINGS = {
-            'wid': WID,
-            'fid': FID,
-            'depth': DEPTH,
-            'radius': RADIUS,
-            'subset': SURFACE_PROFILE_SUBSET,
-            'smoothing': SMOOTHING,
-            'num_points': NUM_POINTS,
-            'degree': DEGREE,
-        }
-        # fit tck
-        tck = manually_fit_tck(df=DF_SURFACE, subset=SURFACE_PROFILE_SUBSET, radius=RADIUS,
-                               smoothing=SMOOTHING, num_points=NUM_POINTS, degree=DEGREE,
-                               path_save=READ_TCK)
-        # export tck
-        DF_TCK = pd.DataFrame(np.vstack([tck[0], tck[1]]).T, columns=['t', 'c'])
-        DF_TCK_SETTINGS = pd.DataFrame.from_dict(data=DICT_TCK_SETTINGS, orient='index', columns=['v'])
-        with pd.ExcelWriter(FP_TCK) as writer:
-            for sheet_name, df, idx, idx_lbl in zip(['tck', 'settings'], [DF_TCK, DF_TCK_SETTINGS], [False, True], [None, 'k']):
-                df.to_excel(writer, sheet_name=sheet_name, index=idx, index_label=idx_lbl)
-    else:
-        DF_TCK = pd.read_excel(FP_TCK, sheet_name='tck')
+    PRE_PROCESS_TCK = True
+    # if PRE_PROCESS_TCK or not os.path.exists(FP_TCK):
+    # --- --- MANUALLY FIT TCK AND EXPORT
+    SMOOTHING = TCK_SMOOTHING  # 50
+    NUM_POINTS = 500
+    DEGREE = 3
+    # fit tck
+    tck, rmin, rmax = manually_fit_tck(df=DF_SURFACE, subset=SURFACE_PROFILE_SUBSET, radius=RADIUS,
+                           smoothing=SMOOTHING, num_points=NUM_POINTS, degree=DEGREE,
+                           path_save=READ_TCK)
+    DICT_TCK_SETTINGS = {
+        'wid': WID,
+        'fid': FID,
+        'depth': DEPTH,
+        'radius': RADIUS,
+        'radius_min': rmin,
+        'radius_max': rmax,
+        'subset': SURFACE_PROFILE_SUBSET,
+        'smoothing': SMOOTHING,
+        'num_points': NUM_POINTS,
+        'degree': DEGREE,
+    }
+    # export tck
+    DF_TCK = pd.DataFrame(np.vstack([tck[0], tck[1]]).T, columns=['t', 'c'])
+    DF_TCK_SETTINGS = pd.DataFrame.from_dict(data=DICT_TCK_SETTINGS, orient='index', columns=['v'])
+    with pd.ExcelWriter(FP_TCK) as writer:
+        for sheet_name, df, idx, idx_lbl in zip(['tck', 'settings'], [DF_TCK, DF_TCK_SETTINGS], [False, True], [None, 'k']):
+            df.to_excel(writer, sheet_name=sheet_name, index=idx, index_label=idx_lbl)
+    #else:
+    #    DF_TCK = pd.read_excel(FP_TCK, sheet_name='tck')
 
-    dict_fid = dict_from_tck(WID, FID, DEPTH, RADIUS, UNITS, NUM_SEGMENTS, fp_tck=FP_TCK)
+    dict_fid = dict_from_tck(WID, FID, DEPTH, RADIUS, UNITS, NUM_SEGMENTS, fp_tck=FP_TCK, r_min=rmin)
 
     # ----
 
@@ -207,6 +265,8 @@ if __name__ == '__main__':
         'surface_include_hole': INCLUDE_THROUGH_HOLE,
         'depth': DEPTH,
         'radius': RADIUS,
+        'dict_settings_radius': DICT_SETTINGS_RADIUS,
+        'tck_smoothing': SMOOTHING,
         'max_dz_for_strain_plot': MAX_DZ_FOR_STRAIN_PLOT,
         'memb_youngs_modulus_bulge_test': MEMB_YOUNGS_MODULUS_BULGE_TEST,
         'memb_residual_stress_bulge_test': MEMB_RESIDUAL_STRESS_BULGE_TEST,

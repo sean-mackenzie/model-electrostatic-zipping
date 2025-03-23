@@ -189,11 +189,11 @@ def plot_surface_profilometry(dict_settings, savepath):
 # 1D PLOTS
 # --------------------------------------------------------
 
-def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None):
+def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None, dz='d0z'):
     # -- setup
     # data
-    dx, dy = 'VOLT', 'd0z'
-    df = df[df['STEP'] <= df['STEP'].iloc[df['VOLT'].idxmax()]]
+    dx, dy = 'VOLT', dz
+    df = df[df['STEP'] <= df['STEP'].iloc[df['VOLT'].abs().idxmax()]]
     # model
     mx, my = 'U', 'z'
     if mkey is not None:
@@ -206,7 +206,7 @@ def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=N
     y = y[np.argmax(y):]
     x0 = np.array([0])
     y0 = np.array([0])
-    xf = np.array([df[dx].max()])
+    xf = np.array([np.max([df[dx].abs().max(), x.max()])])
     yf = np.array([np.min(y)])
     x = np.concatenate((x0, x, xf))
     y = np.concatenate((y0, y, yf))
@@ -214,14 +214,14 @@ def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=N
     # plot
     fig, ax = plt.subplots(figsize=(3.75, 2.5))
     ax.plot(x, y, 'r-', label='Model')
-    ax.plot(df[dx], df[dy], 'ko', ms=1.5, label='Data')
+    ax.plot(df[dx].abs(), df[dy], 'ko', ms=1.5, label='Data')
     ax.set_xlabel(r'$V_{app} \: (V)$')
     ax.set_ylabel(r'$z \: (\mu m)$')
     ax.grid(alpha=0.25)
     ax.legend()
     plt.tight_layout()
     plt.savefig(
-        join(path_results, f'compare_data_to_model_{save_id}.png'),
+        join(path_results, f'compare_data_to_model_{save_id}_{dz}.png'),
         dpi=300,
         facecolor='w',
         bbox_inches='tight',
@@ -270,6 +270,7 @@ def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, 
     plt.tight_layout()
     plt.savefig(join(path_results, f'compare_depth_dependent_in_plane_stretch_with_model_{save_id}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
 
 
 def plot_depth_dependent_in_plane_stretch_from_dfd(dfd, path_results, save_id):
@@ -290,6 +291,7 @@ def plot_depth_dependent_in_plane_stretch_from_dfd(dfd, path_results, save_id):
     plt.tight_layout()
     plt.savefig(join(path_results, f'depth_dependent_in_plane_stretch_{save_id}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
 
 def plot_all_pids_displacement_trajectory(df, px, pdzdr, path_results):
     pdz, pdr = pdzdr
@@ -587,7 +589,48 @@ def plot_pids_dz_by_voltage_ascending(df, pdzdr, dict_test, pid, path_results):
     plt.close()
 
 
-def plot_pids_dz_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
+def plot_pids_dz_by_voltage_hysteresis(df, pdz, dict_test, pid, path_results):
+    """
+
+    :param df:
+    :param pdzdr:
+    :param dict_test:
+    :param pid:
+    :param path_results:
+    :return:
+    """
+    # hard-coded
+    px1 = 'VOLT'
+    # step_max depends on AC or DC
+    if 'awg_mod_ampl_num_steps' in dict_test.keys():
+        step_max = dict_test['awg_mod_ampl_num_steps'] - 1
+    else:
+        step_max = dict_test['smu_step_max']
+    # pre-processing
+    dfpid_ascending = df[df['STEP'] <= step_max]
+    dfpid_descending = df[df['STEP'] > step_max]
+
+    dfg_asc = dfpid_ascending.groupby(px1).mean().reset_index()
+    dfg_desc = dfpid_descending.groupby(px1).mean().reset_index()
+
+    fig, ax1 = plt.subplots()
+
+    # plot z/dz by frames
+    ax1.plot(dfpid_ascending[px1], dfpid_ascending[pdz], 'ro', ms=1.5, label='Ascending', zorder=3.3)
+    ax1.plot(dfg_asc[px1], dfg_asc[pdz], '--', color='tab:red', lw=0.75, zorder=3.1)
+    ax1.plot(dfpid_descending[px1], dfpid_descending[pdz], 'bo', ms=1.5, label='Descending', zorder=3.2)
+    ax1.plot(dfg_desc[px1], dfg_desc[pdz], '--', color='tab:blue', lw=0.75, zorder=3.0)
+    ax1.set_ylabel(r'$\Delta z \: (\mu m)$')
+    ax1.legend(title=r'$p_{ID}=$' + str(pid))
+    ax1.grid(alpha=0.25)
+    ax1.set_xlabel(r'$V_{app} \: (V)$')
+
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pid{}_{}.png'.format(pid, pdz)), dpi=300, facecolor='w')
+    plt.close()
+
+
+def plot_pids_dzdr_by_voltage_hysteresis(df, pdzdr, dict_test, pid, path_results):
     """
 
     :param df:

@@ -10,8 +10,8 @@ if __name__ == '__main__':
     E = 1000  # (kPa) Young's modulus
     J_M = 80  # extensibility constant for Gent hyperelastic model
 
-    KNOWN_PRE_STRETCH = 1.252
-    KNOWN_SIGMA_0 = 345.5  # (kPa) residual stress
+    KNOWN_PRE_STRETCH = 1.131
+    KNOWN_SIGMA_0 = 260  # (kPa) residual stress
 
     # --- ---
 

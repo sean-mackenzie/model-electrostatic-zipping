@@ -25,6 +25,7 @@ def get_dict_dtypes():
         'dpt_start_frame': eval,
         'dpt_end_frames': eval,
         'animate_frames': eval,
+        'samples_per_voltage_level': int,
         'drop_pids': list,
         'd0f_is_tid': int,
         'path_model_dZ_by_V': str,
@@ -96,7 +97,7 @@ def get_dict_dtype_list(data_type):
         ['int', 'str', 'eval', 'special'].
     """
     if data_type == 'int':
-        keys = ['tid', 'd0f_is_tid']
+        keys = ['tid', 'samples_per_voltage_level', 'd0f_is_tid']
     elif data_type == 'str':
         keys = ['filename',
                 'iv_acdc',
@@ -204,13 +205,19 @@ def make_test_settings(filename, settings_handler_dict, dict_settings):
         dpt_end_frames = (100, 110)  # exactly: (83, 88) but not including 83 and 88
         animate_frames = (70, 150)
     else:
-        raise ValueError('Only implemented test types: [STD1, STD2, STD3, VAR3]')
+        raise ValueError(f'{dict_test['test_type']} is not implemented. '
+                         f'Only implemented test types: [STD1, STD2, STD3, VAR3]')
+
+    time_per_sample = 1 / dict_settings['frame_rate']
+    time_per_voltage_level = 1 / (2 * dict_test['awg_freq'])
+    samples_per_voltage_level = np.max([int(np.round(time_per_voltage_level / time_per_sample)), 1])
 
     dict_test.update({
         'filename': filename,
         'iv_acdc': settings_handler_dict['iv_acdc'],
-        'dpt_start_frame': (0, 20),  # exactly: (0, 30)
+        'dpt_start_frame': (0, 10),  # exactly: (0, 30)
         'dpt_end_frames': dpt_end_frames,
+        'samples_per_voltage_level': samples_per_voltage_level,
         'drop_pids': settings_handler_dict['drop_pids'],
         'd0f_is_tid': settings_handler_dict['d0f_is_tid'],
         'animate_frames': animate_frames,

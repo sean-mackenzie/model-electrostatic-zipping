@@ -107,6 +107,35 @@ def calculate_relative_pre_test_coords(df, df0):
     df = df.reset_index(drop=True)
     return df
 
+
+def calculate_lock_in_rolling_min(df, pcols, settings, test_settings, min_periods=1, center=False):
+    if isinstance(pcols, str):
+        pcols = [pcols]
+
+    if 'samples_per_voltage_level' in test_settings.keys():
+        samples_per_stimulus = test_settings['samples_per_voltage_level']
+    else:
+        time_per_sample = 1 / settings['frame_rate']
+        if 'awg_freq' in test_settings.keys():
+            time_per_stimulus = 1 / (2 * test_settings['awg_freq'])
+        elif 'source_delay_time' in test_settings.keys():
+            time_per_stimulus = test_settings['source_delay_time']
+        else:
+            raise ValueError('No source delay time or AWG frequency found in test settings.')
+        samples_per_stimulus = np.max([int(np.round(time_per_stimulus / time_per_sample)), 1])
+
+    dfpids = []
+    for pid in df['id'].unique():
+        dfpid = df[df['id'] == pid]
+        for v in pcols:
+            dfpid[v + '_lock_in'] = df[v].rolling(window=samples_per_stimulus,
+                                                  min_periods=min_periods, center=center).min()
+        dfpids.append(dfpid)
+    df = pd.concat(dfpids)
+    df = df.reset_index(drop=True)
+    return df
+
+
 def merge_with_iv(df, dfv, dfvm=None):
     """
     Note, the index of df and dfv is important.
@@ -164,7 +193,8 @@ def find_closest(original_values, reference_values):
     return closest_values
 
 
-def calculate_net_total_displacement(df, pxyr, start_frame, end_frames, path_results, average_max_n_positions=None):
+def calculate_net_total_displacement(df, pxyr, start_frame, end_frames, path_results,
+                                     average_max_n_positions=None, save_id=None):
     # NOTE: it is important to note that the depth variable (z)
     # is 'z' and the displacement variables are 'd0z' and 'd0r'
     # (which is why it's hard-coded), since we are analyzing
@@ -179,6 +209,10 @@ def calculate_net_total_displacement(df, pxyr, start_frame, end_frames, path_res
         start_frame = (0, start_frame)
     if end_frames is None:
         end_frames = (-1, -1)
+    if save_id is None:
+        save_id = 'net-d0zr_per_pid.xlsx'
+    else:
+        save_id = save_id + '_net-d0zr_per_pid.xlsx'
 
     y_means = []
     for pid in pids:
@@ -242,7 +276,7 @@ def calculate_net_total_displacement(df, pxyr, start_frame, end_frames, path_res
                                         'average_max_n_positions',
                                         ])
     df_rz_means = df_rz_means.sort_values(by='dz_mean', ascending=True)
-    df_rz_means.to_excel(join(path_results, 'net-d0zr_per_pid.xlsx'), index=False)
+    df_rz_means.to_excel(join(path_results, save_id), index=False)
 
     return df_rz_means
 

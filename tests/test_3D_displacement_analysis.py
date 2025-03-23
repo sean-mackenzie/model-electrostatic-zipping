@@ -1,5 +1,7 @@
 import os
 from os.path import join
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -14,10 +16,10 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
-    TIDS = [30, 33]
-    IV_ACDC = 'AC'
-
+    TEST_CONFIG = '03072025_W11-A1_C19-30pT_20+10nmAu'
+    TIDS = [56, 63] #[56, 62, 63]
+    IV_ACDC = 'DC'  # 'AC' or 'DC'
+    ANIMATE_FRAMES = np.arange(5, 300)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     # -
     # SETTINGS (True False)
     VERIFY_SETTINGS = False  # only need to run once per test configuration
@@ -29,18 +31,18 @@ if __name__ == "__main__":
     MERGE_COORDS_AND_VOLTAGE = False
     # -
     # ANALYSES
-    SECOND_PASS_XYM = ['g']  # None: don't do second-pass; ['g', 'm']: use sub-pixel or discrete in-plane localization
-    # -
-    # ---
-    # -
-    # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
-    DROP_PIDS = []  # []: remove bad particles from ALL coords
-    USE_GENERIC_DC_TEST_SETTINGS = False  # in rare cases, do not parse FN_IV filename and instead use generic settings
+    XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
+    SECOND_PASS = True  # True False
+    EXPORT_NET_D0ZR, AVG_MAX_N = False, 8  # True: export dfd0 to special directory
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 2  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    D0F_IS_TID = 21  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    DROP_PIDS = []  # []: remove bad particles from ALL coords
+    # -
+    # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
+    START_FRAME, END_FRAMES = (0, 25), (100, 120)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -48,6 +50,9 @@ if __name__ == "__main__":
 
     for TID in TIDS:
         # ---
+        # --- RARELY USED SETTINGS
+        ANIMATE_RZDR = None  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
+        USE_GENERIC_DC_TEST_SETTINGS = False  # in rare cases, do not parse FN_IV filename and instead use generic settings
         # FILEPATHS
         # ---
         # directories
@@ -104,7 +109,7 @@ if __name__ == "__main__":
             'd0f_is_tid': D0F_IS_TID,
         }
         # -
-        # ------------------------------------------------------------------------------------------------------------------
+        # --------------------------------------------------------------------------------------------------------------
         # ---
         # SETTINGS
         # ---
@@ -118,6 +123,13 @@ if __name__ == "__main__":
                 # Find and read coords
                 FN_COORDS = [x for x in os.listdir(READ_COORDS_DIR) if x.startswith(FN_COORDS_STARTS_WITH)][0]
                 DF = pd.read_excel(join(READ_COORDS_DIR, FN_COORDS))
+                # drop bad pids
+                if 'drop_pids' in DICT_TEST.keys():
+                    if len(DICT_TEST['drop_pids']) > 0:
+                        DROP_PIDS.extend(DICT_TEST['drop_pids'])
+                if len(DROP_PIDS) > 0:
+                    DF = DF[~DF['id'].isin(DROP_PIDS)]
+                print("Dropping pids: {}".format(DROP_PIDS))
                 # pre-process
                 DF = dpt.pre_process_coords(df=DF, settings=DICT_SETTINGS, acdc=IV_ACDC)
                 # get/calculate "initial coords", so that "relative coords" can be determined
@@ -132,19 +144,15 @@ if __name__ == "__main__":
                     # calculate relative coords (relative to pre-start (i.e., frame = 0)
                     # AND relative to pre-tests (i.e., before any voltage was applied).
                     DF = dpt.calculate_relative_coords(df=DF, d0f=D0F, test_settings=DICT_TEST)
-                # drop bad pids
-                if 'drop_pids' in DICT_TEST.keys():
-                    if len(DICT_TEST['drop_pids']) > 0:
-                        DROP_PIDS.extend(DICT_TEST['drop_pids'])
-                if len(DROP_PIDS) > 0:
-                    DF = DF[~DF['id'].isin(DROP_PIDS)]
-                print("Dropping pids: {}".format(DROP_PIDS))
+                    # calculate rolling min (window size = images per voltage level): 'dz_lock_in'
+                    DF = dpt.calculate_lock_in_rolling_min(
+                        df=DF, pcols=['dz', 'd0z'], settings=DICT_SETTINGS, test_settings=DICT_TEST)
                 # export transformed dataframe
                 # for reference: physical + pixel coordinates
                 # DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=True)
                 # for analysis: we need only keep physical coordinates (and frames) for compactness
-                PHYS_COLS = ['frame', 't_sync', 'dt',
-                             'id', 'cm', 'z', 'd0z', 'dz',
+                PHYS_COLS = ['frame', 't_sync', 'dt', 'id', 'cm',
+                             'z', 'd0z', 'dz', 'd0z_lock_in', 'dz_lock_in',
                              'd0rg', 'drg', 'd0rm', 'drm', 'rg', 'rm',
                              'd0xg', 'dxg', 'd0xm', 'dxm', 'xg', 'xm',
                              'd0yg', 'dyg', 'd0ym', 'dym', 'yg', 'ym',
@@ -251,8 +259,7 @@ if __name__ == "__main__":
         else:
             # KEITHLEY COLUMNS: 'SOURCE_TIME_MIDPOINT', 'STEP', 'VOLT', 'CURR', 'TIMESTAMP'
             DF = pd.read_excel(join(SAVE_COORDS, FN_MERGED))
-
-        # ------------------------------------------------------------------------------------------------------------------
+        # --------------------------------------------------------------------------------------------------------------
         # ---
         # FIRST-PASS EVALUATION
         # ---
@@ -280,24 +287,36 @@ if __name__ == "__main__":
                 savepath=join(SAVE_SETTINGS, 'pids-features_on_image.png'),
             )
 
-        # ------------------------------------------------------------------------------------------------------------------
+        # --------------------------------------------------------------------------------------------------------------
         # ---
         # SECOND-PASS EVALUATION
         # ---
         """
         Plot particle z-r displacement vs. (frame, time, and voltage)
         """
-        if SECOND_PASS_XYM is not None:
-            for XYM in SECOND_PASS_XYM:
+        if SECOND_PASS:
+            for xym in XYM:
                 analyses.second_pass(
                     df=DF,
-                    xym=XYM,
+                    xym=xym,
                     tid=TID,
                     dict_settings=DICT_SETTINGS,
                     dict_test=DICT_TEST,
                     path_results=PATH_REPRESENTATIVE,
+                    animate_frames=ANIMATE_FRAMES,
+                    animate_rzdr=ANIMATE_RZDR,
                 )
 
-        # -
+        if EXPORT_NET_D0ZR:
+            for xym in XYM:
+                analyses.export_net_d0zr_per_pid_per_tid(
+                    df=DF,
+                    xym=xym,
+                    tid=TID,
+                    dict_settings=DICT_SETTINGS,
+                    dict_test=DICT_TEST,
+                    path_results=SAVE_DIR,
+                    average_max_n_positions=AVG_MAX_N,
+                )
 
     print("Completed without errors.")

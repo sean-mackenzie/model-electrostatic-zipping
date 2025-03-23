@@ -29,9 +29,12 @@ def profile_tck2solver(r, z):
     return r, z
 
 
-def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck):
+def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck, r_min=None):
     tck = read_tck(filepath=fp_tck)
-    r = np.linspace(0, radius, num_segments)
+
+    if r_min is None:
+        r_min = 0
+    r = np.linspace(r_min, radius, num_segments)
     z = profile_tck(tck, r)
     rnew, znew = profile_tck2solver(r, z)
 

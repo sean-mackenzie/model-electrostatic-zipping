@@ -104,7 +104,7 @@ def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3,
 
     plot_surface_profile_2nd_derivative(x=rx, y=ry, path_save=path_save, smoothing=1000)
 
-    return tck
+    return tck, rx.min(), rx.max()
 
 
 

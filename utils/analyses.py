@@ -8,7 +8,28 @@ import dpt
 from utils import plotting, empirical, fit
 
 
-def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
+def export_net_d0zr_per_pid_per_tid(df, xym, tid, dict_settings, dict_test, path_results, average_max_n_positions):
+    # assign simple column labels
+    # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
+    px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
+    # -
+    path_save = join(path_results, 'net-d0zr_per_pid', 'xy' + xym)
+    if not os.path.exists(path_save):
+        os.makedirs(path_save)
+    # calculate net displacement
+    # (maximum displacement relative to initial coords (i.e., d0f))
+    _ = dpt.calculate_net_total_displacement(
+        df=df,
+        pxyr=(px, py, pr),
+        start_frame=dict_test['dpt_start_frame'],
+        end_frames=None,  # dict_test['dpt_end_frames'],
+        path_results=path_save,
+        average_max_n_positions=average_max_n_positions,
+        save_id=f'tid{tid}',
+    )
+
+
+def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_frames=None, animate_rzdr=None):
     # initialize
     df_model_VdZ = None
     df_model_strain = None
@@ -17,28 +38,33 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
     px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
     pz, pdz, pd0z = 'z', 'dz', 'd0z'
+    pdz_lock_in, pd0z_lock_in = 'dz_lock_in', 'd0z_lock_in'
     przdr = (pr, pd0z, pdr)  # for plotting 3D DPT coords overlay surface profile
+
+    if animate_rzdr is not None:
+        przdr = animate_rzdr
     # -
-    if 'animate_frames' in dict_test.keys():
-        frames_with_surface_profile = np.arange(dict_test['animate_frames'][0], dict_test['animate_frames'][1])
+    if animate_frames is not None:
+        pass
+    elif 'animate_frames' in dict_test.keys():
+        animate_frames = np.arange(dict_test['animate_frames'][0], dict_test['animate_frames'][1])
     elif 'dpt_start_frame' in dict_test.keys() and 'dpt_end_frames' in dict_test.keys():
-        frames_with_surface_profile = np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0])
+        animate_frames = np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0])
     else:
-        frames_with_surface_profile = np.arange(5, 125)
-    frames_quiver = frames_with_surface_profile
-    frames_drdz = frames_with_surface_profile
+        animate_frames = np.arange(5, 125)
+    frames_drdz = animate_frames
     # -
-    only_pids = []  # if None, then plot all pids
+    only_pids = None  # if None, then plot all pids
     not_pids = []  # [], then plot all pids
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 10
+    average_max_n_positions = 8
     # --- --- SLICE
-    compare_pull_in_voltage_with_model = False # compares with model if 'path_model_dZ_by_V' if 'path_model_...'
-    model_mkey, model_mval = None, None  # 'E', 1.1e6
-    plot_depth_dependent_in_plane_stretch = False  # compares with model if 'path_model_strain' in dict_settings.keys()
-    plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
+    compare_pull_in_voltage_with_model = True # compares with model if 'path_model_dZ_by_V' if 'path_model_...'
+    model_mkey, model_mval = 'pre_stretch', 1.131  # None, Non; 'E', 1.1e6
+    plot_depth_dependent_in_plane_stretch = True  # compares with model if 'path_model_strain' in dict_settings.keys()
+    plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
     # --- --- FIELD OF VIEW
     plot_scatter_xy_by_frame = False
     plot_quiver_xy_by_frame = True
@@ -47,22 +73,25 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     plot_single_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
     plot_pids_dr_by_dz = True
     plot_pids_by_synchronous_time_voltage = True
-    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
-    plot_pids_dz_by_voltage_hysteresis = False
+    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
+    plot_pids_dz_by_voltage_hysteresis = True
     # -
     # --- --- PLOT R-Z DISPLACEMENTS: CROSS-SECTION VIEW (True, False)
     # plot normalized profile to visualize bending of suspended membrane
-    plot_normalized_membrane_profile, frois_norm_profile = False, [15, 53, 71, 135]
+    plot_normalized_membrane_profile, frois_norm_profile = False, [20, 50, 101, 145, 154]
     # plot frames of interest overlay
-    plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [15, 53, 71, 85]
+    plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [20, 50, 101, 145, 154]
     # plot every frame
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
     fit_spline_to_memb = False
-    dr_ampl = 1
+    dr_ampl = 10
     if (plot_quiver_xy_by_frame or plot_1D_dz_by_r_by_frame_with_surface_profile or
             plot_normalized_membrane_profile or plot_1D_dz_by_r_by_frois_with_surface_profile):
+        if 'fid_process_profile' in dict_settings.keys():
+            surf_fid_override = dict_settings['fid_process_profile']
+        else:
+            surf_fid_override = None
         surf_profile_subset = 'left_half'  # 'full', 'left_half', 'right_half'
-        surf_fid_override = None
         surf_shift_r, surf_shift_z, surf_scale_z = 0, 0, 1
 
         df_surface = empirical.read_surface_profile(
@@ -76,7 +105,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     if fit_spline_to_memb:
         # get radial position of n-th inner-most particle
         faux_is_average_of_n = 5
-        faux_r_zero = df[df['frame'] == frames_with_surface_profile[0]].sort_values(pr, ascending=True).iloc[faux_is_average_of_n][pr] + 1.5
+        faux_r_zero = df[df['frame'] == animate_frames[0]].sort_values(pr, ascending=True).iloc[faux_is_average_of_n][pr] + 1.5
         dict_fit_memb = {
             's': 350,  # straight-angled sidewalls: s ~ 1500; erf: s ~ 1000; multi-stable: s ~ 250
             'faux_r_zero': faux_r_zero,  # dict_settings['radius_hole_microns'] * 1.5,  # None: do not use faux(r=0)
@@ -111,15 +140,24 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
         plot_pids_by_synchronous_time_voltage_monitor = False
 
     # read model data
-    if compare_pull_in_voltage_with_model:
-        if 'path_model_dZ_by_V' in dict_test.keys():
-            df_model_VdZ = pd.read_excel(dict_test['path_model_dZ_by_V'])
-            print("TEST SETTINGS OVERRIDING SETTINGS FOR 'path_model_dZ_by_V'")
-        elif 'path_model_dZ_by_V' in dict_settings.keys():
-            df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'])
-    if 'path_model_strain' in dict_settings.keys() and plot_depth_dependent_in_plane_stretch is True:
-        df_model_strain = pd.read_excel(dict_settings['path_model_strain'])
-        # df_model = df_model[df_model['dZ'] < df_model['dZ'].max() - 0.75e-6]
+    if compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch:
+        #if 'path_model_dZ_by_V' or 'path_model_strain' in dict_test.keys():
+        #    print("TEST SETTINGS OVERRIDING SETTINGS FOR 'path_model_dZ_by_V'")
+        #    raise ValueError("This is a special case. Need to double-check this instance.")
+        #    df_model_VdZ = pd.read_excel(dict_test['path_model_dZ_by_V'])
+        if 'path_model' in dict_settings.keys():
+            mfiles = [x for x in os.listdir(dict_settings['path_model'].strip("'")) if x.endswith('.xlsx')]
+            mfile_z_by_v = [x for x in mfiles if x.endswith('z-by-v.xlsx')][0]
+            mfile_strain_by_z = [x for x in mfiles if x.endswith('strain-by-z.xlsx')][0]
+
+            df_model_VdZ = pd.read_excel(join(dict_settings['path_model'], mfile_z_by_v))
+            df_model_strain = pd.read_excel(join(dict_settings['path_model'], mfile_strain_by_z))
+        elif 'path_model_dZ_by_V' or 'path_model_strain' in dict_settings.keys():
+            df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'].strip("'"))
+            df_model_strain = pd.read_excel(dict_settings['path_model_strain'].strip("'"))
+        else:
+            compare_pull_in_voltage_with_model = False
+            plot_depth_dependent_in_plane_stretch = False
 
     # -
     path_results_rep = join(path_results.format(tid), 'xy' + xym)
@@ -137,9 +175,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     path_results_pids_by_synchronous_time_voltage = join(path_results_per_pid, 'pids_by_sync-time-volts')
     path_results_pids_by_synchronous_time_voltage_monitor = join(path_results_per_pid, 'pids_by_sync-time-volts-monitor')
     path_results_pids_dz_by_voltage_hysteresis = join(path_results_per_pid, 'pids_dz_by_voltage_hysteresis')
+    path_results_pids_dzdr_by_voltage_hysteresis = join(path_results_per_pid, 'pids_dzdr_by_voltage_hysteresis')
     # field-of-view
     path_results_scatter_xy_by_frame = join(path_results_xy, 'scatter_xy_by_frame')
-    path_results_quiver_xy_by_frame = join(path_results_xy, 'quiver_xy_by_frame')
+    path_results_quiver_xy_by_frame = join(path_results_xy, 'quiver_dxdy_by_frame')
     path_results_2D_z_by_frame = join(path_results_xy, '2D_z_by_frame')
     path_results_2D_dz_by_frame = join(path_results_xy, '2D_dz_by_frame')
     path_results_2D_dr_by_frame = join(path_results_xy, '2D_dr_by_frame')
@@ -155,7 +194,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             path_results_compare_dZ_by_V, path_results_depth_dependent_in_plane_stretch, path_results_pids_by_X,
             path_results_pids_by_frame, path_results_pids_dr_by_dz,
             path_results_pids_by_synchronous_time_voltage, path_results_pids_by_synchronous_time_voltage_monitor,
-            path_results_pids_dz_by_voltage_hysteresis,
+            path_results_pids_dz_by_voltage_hysteresis, path_results_pids_dzdr_by_voltage_hysteresis,
             path_results_scatter_xy_by_frame, path_results_quiver_xy_by_frame,
             path_results_1D_z_by_r_by_frame, path_results_1D_dz_by_r_by_frame,
             path_results_2D_z_by_frame, path_results_2D_dz_by_frame, path_results_2D_dr_by_frame,
@@ -165,7 +204,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             compare_pull_in_voltage_with_model, plot_depth_dependent_in_plane_stretch, plot_all_pids_by_X,
             plot_single_pids_by_frame, plot_pids_dr_by_dz,
             plot_pids_by_synchronous_time_voltage, plot_pids_by_synchronous_time_voltage_monitor,
-            plot_pids_dz_by_voltage_hysteresis,
+            plot_pids_dz_by_voltage_hysteresis, plot_pids_dz_by_voltage_hysteresis,
             plot_scatter_xy_by_frame, plot_quiver_xy_by_frame,
             plot_1D_z_by_r_by_frame, plot_1D_dz_by_r_by_frame,
             plot_2D_z_by_frame, plot_2D_dz_by_frame, plot_2D_dr_by_frame,
@@ -199,6 +238,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
             path_results=path_results_rep,
             average_max_n_positions=average_max_n_positions,
         )
+    else:
+        dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
+        dfd0 = pd.read_excel(join(path_results_rep, 'net-d0zr_per_pid.xlsx'))
 
     # --- plot only a subset of particles
     # removes "bad" particles from visualizations, or
@@ -208,9 +250,6 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     elif not_pids:
         df = df[~df['id'].isin(not_pids)]
     only_pids = df['id'].unique()
-    if eval_pids_drz is False:
-        dfd = pd.read_excel(join(path_results_rep, 'net-dzr_per_pid.xlsx'))
-        dfd0 = pd.read_excel(join(path_results_rep, 'net-d0zr_per_pid.xlsx'))
     dfd = dfd[dfd['id'].isin(only_pids)]
     dfd0 = dfd0[dfd0['id'].isin(only_pids)]
 
@@ -219,16 +258,27 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     # --- SLICE
     if (compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
         if compare_pull_in_voltage_with_model:
-            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.125)]['id'].unique():
+            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.15)]['id'].unique():
                 df_pid = df[df['id'] == pid].reset_index(drop=True)
                 plotting.compare_dZ_by_V_with_model(
                     df=df_pid,
                     dfm=df_model_VdZ,
                     path_results=path_results_compare_dZ_by_V,
-                    save_id=f'pid{pid}',
+                    save_id=f'pid{int(pid)}',
                     mkey=model_mkey,  # column name
                     mval=model_mval,  # column value
+                    dz=pd0z,
                 )
+                if dict_test['samples_per_voltage_level'] > 1 and pd0z_lock_in in df_pid.columns:
+                    plotting.compare_dZ_by_V_with_model(
+                        df=df_pid,
+                        dfm=df_model_VdZ,
+                        path_results=path_results_compare_dZ_by_V,
+                        save_id=f'pid{int(pid)}',
+                        mkey=model_mkey,  # column name
+                        mval=model_mval,  # column value
+                        dz=pd0z_lock_in,
+                    )
 
         if plot_depth_dependent_in_plane_stretch:
             plotting.plot_depth_dependent_in_plane_stretch_from_dfd(
@@ -280,11 +330,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
     if plot_quiver_xy_by_frame:
         plotting.plot_quiver_xy_dxdy(
             df=df,
-            pxydxdy=(px, py, pd0x, pd0y),
-            pcolor_dxdy=pd0r,
-            frames=frames_quiver,
+            pxydxdy=(px, py, pdx, pdy),
+            pcolor_dxdy=pdr,
+            frames=animate_frames,
             scale=5,  # arrow lengths are 5X larger than data units
-            savepath=join(path_results_quiver_xy_by_frame, 'quiver_xyd0xd0y_fr{}.png'),
+            savepath=join(path_results_quiver_xy_by_frame, 'quiver_xy_dxdy_clr=dr_fr{}.png'),
             field=(0, dict_settings['field_of_view']),
             units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$'),
             overlay_circles=True,
@@ -414,18 +464,26 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 )
 
             if plot_pids_dz_by_voltage_hysteresis:
-                plotting.plot_pids_dz_by_voltage_hysteresis(
+                plotting.plot_pids_dzdr_by_voltage_hysteresis(
                     df=dfpid,
                     pdzdr=(pdz, pdr),
                     dict_test=dict_test,
                     pid=pid,
-                    path_results=path_results_pids_dz_by_voltage_hysteresis)
-                plotting.plot_pids_dz_by_voltage_hysteresis(
+                    path_results=path_results_pids_dzdr_by_voltage_hysteresis)
+                plotting.plot_pids_dzdr_by_voltage_hysteresis(
                     df=dfpid,
                     pdzdr=(pd0z, pd0r),
                     dict_test=dict_test,
                     pid=pid,
-                    path_results=path_results_pids_dz_by_voltage_hysteresis)
+                    path_results=path_results_pids_dzdr_by_voltage_hysteresis)
+
+                if pd0z_lock_in in dfpid.columns:
+                    plotting.plot_pids_dz_by_voltage_hysteresis(
+                        df=dfpid,
+                        pdz=pd0z_lock_in,
+                        dict_test=dict_test,
+                        pid=pid,
+                        path_results=path_results_pids_dz_by_voltage_hysteresis)
 
             # ---
 
@@ -547,11 +605,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results):
                 df,
                 przdr=przdr,
                 dict_surf=dict_surface_profilometry,
-                frames=frames_with_surface_profile,
+                frames=animate_frames,
                 path_save=path_results_1D_dz_by_r_by_frame_w_surf,
                 dict_fit=dict_fit_memb,
                 dr_ampl=dr_ampl,
-                show_interface=True
+                show_interface=True,
             )
 
 

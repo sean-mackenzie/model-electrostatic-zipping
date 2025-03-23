@@ -19,11 +19,13 @@ def get_dict_dtypes():
         'filename': str,
         'dpt_start_frame': tuple,
         'dpt_end_frames': tuple,
+        'animate_frames': tuple,
         'smu_test_type': int,
         'smu_source_delay_time': float,
         'smu_vmax': int,
         'smu_dv': float,
         'smu_step_max': int,
+        'samples_per_voltage_level': int,
         'drop_pids': list,
         'd0f_is_tid': int,
         'path_model_dZ_by_V': str,
@@ -45,11 +47,11 @@ def get_dict_dtype_list(data_type):
         accepted list ['int', 'str', 'eval', 'special'].
     """
     if data_type == 'int':
-        keys = ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max', 'd0f_is_tid']
+        keys = ['tid', 'smu_test_type', 'smu_vmax', 'smu_step_max', 'samples_per_voltage_level', 'd0f_is_tid']
     elif data_type == 'str':
         keys = ['filename', 'path_model_dZ_by_V']
     elif data_type == 'eval':
-        keys = ['dpt_end_frames', 'drop_pids']
+        keys = ['dpt_end_frames', 'animate_frames', 'drop_pids']
     elif data_type == 'special':
         keys = ['dpt_start_frame']
     else:
@@ -120,6 +122,11 @@ def make_test_settings(filename, start_frame, end_frames, drop_pids, d0f_is_tid,
         tid, test_type, vmax, dv, step_max = parse_voltage_waveform_from_filename(filename=filename)
     else:
         tid, test_type, vmax, dv, step_max = -1, 1, 0, 0, 0
+
+    time_per_sample = 1 / dict_settings['frame_rate']
+    time_per_voltage_level = dict_settings['source_delay_time_by_test'][test_type]
+    samples_per_voltage_level = np.max([int(np.round(time_per_voltage_level / time_per_sample)), 1])
+
     # -
     dict_test = {
         'tid': tid,
@@ -127,10 +134,11 @@ def make_test_settings(filename, start_frame, end_frames, drop_pids, d0f_is_tid,
         'dpt_start_frame': start_frame,
         'dpt_end_frames': end_frames,
         'smu_test_type': test_type,
-        'smu_source_delay_time': dict_settings['source_delay_time_by_test'][test_type],
+        'smu_source_delay_time': time_per_voltage_level,
         'smu_vmax': vmax,
         'smu_dv': dv,
         'smu_step_max': step_max,
+        'samples_per_voltage_level': samples_per_voltage_level,
         'drop_pids': drop_pids,
         'd0f_is_tid': d0f_is_tid,
     }

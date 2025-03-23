@@ -34,6 +34,9 @@ if __name__ == "__main__":
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
     TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
 
+    #TODO: scatter plot (per-pid) of voltage vs. z-position for all tests:
+    # (DC tests will reveal little dependence b/c hysteresis. AC tests should show good dependence.)
+
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
