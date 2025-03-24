@@ -30,19 +30,17 @@ def export_net_d0zr_per_pid_per_tid(df, xym, tid, dict_settings, dict_test, path
 
 
 def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_frames=None, animate_rzdr=None):
-    # initialize
-    df_model_VdZ = None
-    df_model_strain = None
-
     # assign simple column labels
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
     px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
     pz, pdz, pd0z = 'z', 'dz', 'd0z'
     pdz_lock_in, pd0z_lock_in = 'dz_lock_in', 'd0z_lock_in'
     przdr = (pr, pd0z, pdr)  # for plotting 3D DPT coords overlay surface profile
-
-    if animate_rzdr is not None:
-        przdr = animate_rzdr
+    # -
+    # initialize
+    df_model_VdZ = None
+    df_model_strain = None
+    plot_scatter_xy_by_frame = False
     # -
     if animate_frames is not None:
         pass
@@ -54,54 +52,91 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         animate_frames = np.arange(5, 125)
     frames_drdz = animate_frames
     # -
-    only_pids = None  # if None, then plot all pids
-    not_pids = []  # [], then plot all pids
+    if animate_rzdr is not None:
+        przdr = animate_rzdr
+    # -
+    if 'smu_test_type' in dict_test.keys():
+        if dict_test['smu_test_type'] in [1, 2, '1', '2']:
+            compare_pull_in_voltage_with_model = True
+            plot_depth_dependent_in_plane_stretch = True
+            plot_pids_dr_by_dz = True
+            plot_pids_dz_by_voltage_hysteresis = True
+        else:
+            compare_pull_in_voltage_with_model = False
+            plot_depth_dependent_in_plane_stretch = False
+            plot_pids_dr_by_dz = False
+            plot_pids_dz_by_voltage_hysteresis = False
+            plot_normalized_membrane_profile, frois_norm_profile = False, []
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
+    elif 'test_type' in dict_test.keys():
+        if dict_test['test_type'] in ['STD1', 'STD2']:
+            compare_pull_in_voltage_with_model = True
+            plot_depth_dependent_in_plane_stretch = True
+            plot_pids_dr_by_dz = True
+            plot_pids_dz_by_voltage_hysteresis = True
+            plot_normalized_membrane_profile, frois_norm_profile = True, [40, 50, 70, 101]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [40, 50, 75, 101]
+        else:
+            compare_pull_in_voltage_with_model = False
+            plot_depth_dependent_in_plane_stretch = False
+            plot_pids_dr_by_dz = False
+            plot_pids_dz_by_voltage_hysteresis = False
+            plot_normalized_membrane_profile, frois_norm_profile = False, []
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
+    else:
+        # pass
+        compare_pull_in_voltage_with_model = False
+        plot_depth_dependent_in_plane_stretch = False
+        plot_pids_dr_by_dz = False
+        plot_pids_dz_by_voltage_hysteresis = False
+        plot_normalized_membrane_profile, frois_norm_profile = False, []
+        plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
+    # -
+    only_pids = None  # if [1, 2...], then remove these pids from df, dfd, and dfd0 before plotting; None: keep all pids
+    not_pids = []  # if [], then keep all pids in df, dfd, and dfd0 for plotting; [1, 2...]: remove before plotting
+    only_per_pid_plot_these_pids = [1, 2, 5, 14, 20, 17, 12, 33, 27, 19, 43, 40]  # None; if [1, 2...], then plot only these pids for per-pid trajectory plots
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
     average_max_n_positions = 8
-    # --- --- SLICE
-    compare_pull_in_voltage_with_model = True # compares with model if 'path_model_dZ_by_V' if 'path_model_...'
-    model_mkey, model_mval = 'pre_stretch', 1.131  # None, Non; 'E', 1.1e6
-    plot_depth_dependent_in_plane_stretch = True  # compares with model if 'path_model_strain' in dict_settings.keys()
+    # -
+    model_mkey, model_mval = 'pre_stretch', 1.146  # None, Non; 'E', 1.1e6
+    # -
     plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
-    # --- --- FIELD OF VIEW
-    plot_scatter_xy_by_frame = False
-    plot_quiver_xy_by_frame = True
     plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
     plot_single_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_dr_by_dz = True
     plot_pids_by_synchronous_time_voltage = True
-    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
-    plot_pids_dz_by_voltage_hysteresis = True
+    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
     # -
-    # --- --- PLOT R-Z DISPLACEMENTS: CROSS-SECTION VIEW (True, False)
-    # plot normalized profile to visualize bending of suspended membrane
-    plot_normalized_membrane_profile, frois_norm_profile = False, [20, 50, 101, 145, 154]
-    # plot frames of interest overlay
-    plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [20, 50, 101, 145, 154]
-    # plot every frame
+    # --- --- ANIMATIONS (True, False)
+    plot_quiver_xy_by_frame = True
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
-    fit_spline_to_memb = False
+    show_zipping_interface = True
     dr_ampl = 10
+    fit_spline_to_memb = False
+    test_description = dict_test['filename'].split('.xlsx')[0].split('_data')[0].replace('_', ' ')
     if (plot_quiver_xy_by_frame or plot_1D_dz_by_r_by_frame_with_surface_profile or
             plot_normalized_membrane_profile or plot_1D_dz_by_r_by_frois_with_surface_profile):
         if 'fid_process_profile' in dict_settings.keys():
             surf_fid_override = dict_settings['fid_process_profile']
         else:
             surf_fid_override = None
-        surf_profile_subset = 'left_half'  # 'full', 'left_half', 'right_half'
+        surf_profile_subset = 'right_half'  # 'full', 'left_half', 'right_half'
         surf_shift_r, surf_shift_z, surf_scale_z = 0, 0, 1
+        include_hole = True
+        if surf_profile_subset == 'full':
+            include_hole = False
 
         df_surface = empirical.read_surface_profile(
             dict_settings,
             subset=surf_profile_subset,
-            hole=True,
+            hole=include_hole,
             fid_override=surf_fid_override,
         )
         dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(),
-                                     'dr': surf_shift_r, 'dz': surf_shift_z, 'scale_z': surf_scale_z}
+                                     'dr': surf_shift_r, 'dz': surf_shift_z, 'scale_z': surf_scale_z,
+                                     'subset': surf_profile_subset}
     if fit_spline_to_memb:
         # get radial position of n-th inner-most particle
         faux_is_average_of_n = 5
@@ -252,6 +287,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     only_pids = df['id'].unique()
     dfd = dfd[dfd['id'].isin(only_pids)]
     dfd0 = dfd0[dfd0['id'].isin(only_pids)]
+    if only_per_pid_plot_these_pids is not None:
+        only_pids = only_per_pid_plot_these_pids
 
     # --- --- SINGLE PLOTS
 
@@ -269,7 +306,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     mval=model_mval,  # column value
                     dz=pd0z,
                 )
-                if dict_test['samples_per_voltage_level'] > 1 and pd0z_lock_in in df_pid.columns:
+                if dict_test['samples_per_voltage_level'] > 1.5 and pd0z_lock_in in df_pid.columns:
                     plotting.compare_dZ_by_V_with_model(
                         df=df_pid,
                         dfm=df_model_VdZ,
@@ -339,9 +376,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$'),
             overlay_circles=True,
             dict_settings=dict_settings,
-            show_interface=True,
+            show_interface=show_zipping_interface,
             dict_surf=dict_surface_profilometry,
             prz=(pr, pd0z),
+            temporal_display_units='frame',
+            title=test_description,
         )
 
     if plot_heatmaps:
@@ -609,7 +648,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                 path_save=path_results_1D_dz_by_r_by_frame_w_surf,
                 dict_fit=dict_fit_memb,
                 dr_ampl=dr_ampl,
-                show_interface=True,
+                show_interface=show_zipping_interface,
+                temporal_display_units='frame',
+                title=test_description,
             )
 
 

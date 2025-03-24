@@ -16,10 +16,10 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03072025_W11-A1_C19-30pT_20+10nmAu'
-    TIDS = [56, 63] #[56, 62, 63]
-    IV_ACDC = 'DC'  # 'AC' or 'DC'
-    ANIMATE_FRAMES = np.arange(5, 300)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
+    TIDS = [28]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    IV_ACDC = 'AC'  # 'AC' or 'DC'
+    ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     # -
     # SETTINGS (True False)
     VERIFY_SETTINGS = False  # only need to run once per test configuration
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 21  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------------------------
 
     for TID in TIDS:
+        print("TID: {}".format(TID))
         # ---
         # --- RARELY USED SETTINGS
         ANIMATE_RZDR = None  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots

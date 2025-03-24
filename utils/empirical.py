@@ -98,7 +98,9 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
     return df
 
 
-def get_zipping_interface_r_from_z(z0, surf_r, surf_z):
+def get_zipping_interface_r_from_z(z0, surf_r, surf_z, z0_max=-0.01):
+    if z0 > z0_max:
+        z0 = z0_max
     # make sure the arrays are sorted
     # primary sort: r
     sorted_indices = np.argsort(surf_r)

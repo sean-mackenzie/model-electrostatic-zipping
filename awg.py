@@ -215,7 +215,7 @@ def make_test_settings(filename, settings_handler_dict, dict_settings):
     dict_test.update({
         'filename': filename,
         'iv_acdc': settings_handler_dict['iv_acdc'],
-        'dpt_start_frame': (0, 10),  # exactly: (0, 30)
+        'dpt_start_frame': (1, 12),  # exactly: (0, 30)
         'dpt_end_frames': dpt_end_frames,
         'samples_per_voltage_level': samples_per_voltage_level,
         'drop_pids': settings_handler_dict['drop_pids'],
