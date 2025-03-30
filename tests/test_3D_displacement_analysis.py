@@ -16,9 +16,9 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
-    TIDS = [28]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
-    IV_ACDC = 'AC'  # 'AC' or 'DC'
+    TEST_CONFIG = '0112025_W11-B1_C9-0pT'
+    TIDS = [1, 4, 5, 6, 7]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    IV_ACDC = 'DC'  # 'AC' or 'DC'
     ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     # -
     # SETTINGS (True False)
@@ -32,8 +32,8 @@ if __name__ == "__main__":
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
-    SECOND_PASS = True  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = False, 8  # True: export dfd0 to special directory
+    SECOND_PASS = False  # True False
+    EXPORT_NET_D0ZR, AVG_MAX_N = True, 4  # True: export dfd0 to special directory
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (0, 25), (100, 120)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (0, 6), (100, 120)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -116,6 +116,14 @@ if __name__ == "__main__":
         # ---
         DICT_SETTINGS, DICT_TEST = settings.settings_handler(settings_handler_dict=SETTINGS_HANDLER_DICT)
         # ---
+        if not os.path.exists(join(SAVE_COORDS, FN_MERGED)):
+            PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
+            PRE_PROCESS_IV = True  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
+            MERGE_COORDS_AND_VOLTAGE = True
+        else:
+            PRE_PROCESS_COORDS = False  # If you change andor_keithley_delay time, you must pre-process coords.
+            PRE_PROCESS_IV = False  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
+            MERGE_COORDS_AND_VOLTAGE = False
         # PRE-PROCESSING
         # ---
         if PRE_PROCESS_COORDS or PRE_PROCESS_IV or MERGE_COORDS_AND_VOLTAGE:

@@ -1,6 +1,7 @@
 # tests/test_model_sweep.py
 
 # imports
+import os
 from os.path import join
 import numpy as np
 import pandas as pd
@@ -1241,13 +1242,13 @@ def plot_2D_heatmap(df, pxyz, savepath=None, field=None, interpolate='linear',
 # BELOW: PLOTS FOR TESTX: MERGED COORDS VOLTS
 # ----------------------------------
 
-def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_by_dz_quantile=0.15,
+def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_by_d0z=0.0, only_pids=None,
                                                  only_test_types=None, arr_model_VdZ=None):
     pz, pc = 'd0z', 'awg_freq'
     dx, dy = 'VOLT', pz
     # filter test types
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3']
     df = df[df['test_type'].isin(only_test_types)]
 
     # setup frequency color bar
@@ -1260,11 +1261,11 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
     norm = colors.LogNorm(vmin=vmin, vmax=vmax)
 
     # filter z-displacement
-    dz_threshold = df[pz].quantile(threshold_pids_by_dz_quantile)
-    dz_threshold_pids = df[df[pz] < dz_threshold]['id'].unique()
-    df = df[df['id'].isin(dz_threshold_pids)]
+    if only_pids is None:
+        only_pids = df[df[pz] < threshold_pids_by_d0z]['id'].unique()
+    df = df[df['id'].isin(only_pids)]
 
-    for pid in dz_threshold_pids:
+    for pid in only_pids:
         df_pid = df[df['id'] == pid].reset_index(drop=True)
         tids = df_pid['tid'].unique()
 
@@ -1290,7 +1291,81 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
                     dpi=300, facecolor='w', bbox_inches='tight')
         plt.close(fig)
 
-def plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(df, path_save, threshold_pids_by_dz_quantile=0.15, only_test_types=None):
+
+def plot_parametric_sweeps_per_pid_trajectory_by_tid(df_mcviv, combinations, only_pids, threshold_pids_by_d0z, path_save):
+    px, py1, py2 = 't_sync', 'd0z', 'd0rg'
+
+    if only_pids is None:
+        only_pids = df_mcviv[df_mcviv[py1] < threshold_pids_by_d0z]['id'].unique()
+
+    df_mcviv = df_mcviv[df_mcviv['id'].isin(only_pids)]
+
+    for result in combinations:
+        # parse group definition into a nice standard name
+        # and make directory to save figures into
+        gd = result['group_definition']
+        unique_id = ''
+        if 'test_type' in gd.keys():
+            unique_id += str(gd['test_type']) + '_'
+        if 'output_volt' in gd.keys():
+            unique_id += str(int(gd['output_volt'])) + 'V_'
+        if 'awg_freq' in gd.keys():
+            if gd['awg_freq'] >= 1000:
+                unique_id += str(gd['awg_freq'] / 1000) + 'kHz_'
+            elif gd['awg_freq'] >= 10:
+                unique_id += str(int(gd['awg_freq'])) + 'Hz_'
+            else:
+                unique_id += str(gd['awg_freq']) + 'Hz_'
+        if 'awg_wave' in gd.keys():
+            unique_id += str(gd['awg_wave'])
+        unique_id = unique_id.rstrip('_')
+        path_save_group = join(path_save, unique_id)
+        if not os.path.exists(path_save_group):
+            os.makedirs(path_save_group)
+
+        # get tids in this group
+        tids = result['group_tids']
+        df = df_mcviv[df_mcviv['tid'].isin(tids)]
+
+        # get independent variable
+        col_label = result['remaining_column']
+        ncols = int(np.ceil(len(tids) / 16))
+
+        # iterate and plot
+        for pid in only_pids:
+            df_pid = df[df['id'] == pid]
+            tids.sort()
+
+            fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(7, 7), gridspec_kw={'height_ratios': [1, 0.5]})
+
+            for tid in tids:
+                df_pid_tid = df_pid[df_pid['tid'] == tid]
+                try:
+                    label = df_pid_tid[col_label].iloc[0]
+                except IndexError:
+                    print("IndexError: {} - tid {} - pid {}".format(unique_id, tid, pid))
+                    label = ''
+
+                ax1.plot(df_pid_tid[px], df_pid_tid[py1], '-', lw=0.5, label=f'{tid}: {label}')
+                ax2.plot(df_pid_tid[px], df_pid_tid[py2], '-', lw=0.5, label=f'{tid}: {label}')
+
+            ax1.set_ylabel(r'$\Delta_{o} z \: (\mu m)$')
+            ax1.grid(alpha=0.2)
+            ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), title=col_label, fontsize='x-small', ncol=ncols)
+
+            ax2.set_ylabel(r'$\Delta_{o} r \: (\mu m)$')
+            ax2.grid(alpha=0.2)
+            ax2.set_xlabel(r'$t \: (s)$')
+
+            plt.suptitle(unique_id + ': ' + r'$p_{ID}=$' + '{}'.format(pid))
+            plt.tight_layout()
+            plt.savefig(join(path_save_group, 'pid{}_{}_vs_{}.png'.format(pid, col_label, unique_id)),
+                        dpi=300, facecolor='w', bbox_inches='tight')
+            plt.close(fig)
+
+
+def plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(df, path_save, threshold_pids_by_d0z=0.0,
+                                                          only_test_types=None, save_id=None):
 
     pv, pf, pz = 'VOLT', 'awg_freq', 'd0z'
     # Check that required columns exist in the dataframe
@@ -1299,11 +1374,13 @@ def plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(df, path_save, thresho
         raise ValueError(f"The dataframe must contain columns: {required_columns}")
 
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3']
     df = df[df['test_type'].isin(only_test_types)]
 
-    dz_threshold = df[pz].quantile(threshold_pids_by_dz_quantile)
-    dz_threshold_pids = df[df[pz] < dz_threshold]['id'].unique()
+    if save_id is None:
+        save_id = ''
+
+    dz_threshold_pids = df[df[pz] < threshold_pids_by_d0z]['id'].unique()
     df = df[df['id'].isin(dz_threshold_pids)]
 
     df = df.round({'VOLT': -1})
@@ -1324,11 +1401,11 @@ def plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(df, path_save, thresho
     plt.colorbar(label='D0Z (um)')
     plt.xlabel('Volt (V)')
     plt.ylabel('Frequency (Hz)')
-    plt.title('2D Heatmap: Frequency vs Volt (D0Z, DZ_thresh={})'.format(np.round(dz_threshold, 1)))
+    plt.title('2D Heatmap: Frequency vs Volt (D0Z, DZ_thresh={})'.format(threshold_pids_by_d0z))
     plt.xticks(ticks=np.arange(len(heatmap_data.columns)), labels=heatmap_data.columns, rotation=90)
     plt.yticks(ticks=np.arange(len(heatmap_data.index)), labels=heatmap_data.index)
     plt.tight_layout()
-    plt.savefig(join(path_save, 'heatmap_merged_coords_volt_by_volt-freq_all_pids.png'),
+    plt.savefig(join(path_save, f'{save_id}_heatmap_merged_coords_volt_by_volt-freq_all_pids.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
 
@@ -1343,14 +1420,14 @@ def plot_net_d0zr_per_pid_by_volt_freq(df, path_save, only_test_types=None, arr_
     cmap = 'coolwarm'
 
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3']
     df = df[df['test_type'].isin(only_test_types)]
 
     pids = df['id'].unique()
 
     for pid in pids:
         df_pid = df[df['id'] == pid].sort_values('awg_freq', ascending=True)
-        x, y, c = df_pid[px], df_pid[py1], df_pid[pc]
+        x, y, c = df_pid[px].abs(), df_pid[py1], df_pid[pc]
         vmin, vmax = c.min(), c.max()
         if vmin < 0.25: vmin = 0.25
         if vmax > 10e3: vmax = 10e3
@@ -1370,23 +1447,22 @@ def plot_net_d0zr_per_pid_by_volt_freq(df, path_save, only_test_types=None, arr_
                     dpi=300, facecolor='w', bbox_inches='tight')
         plt.close(fig)
 
-def plot_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_dz_quantile=0.15, only_test_types=None,
+def plot_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_d0z=0.0, only_test_types=None,
                                         arr_model_VdZ=None):
     px, py1, py2, pc = 'output_volt', 'dz_mean', 'dr_mean', 'awg_freq'
     cmap = 'plasma'
 
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     df = df[df['test_type'].isin(only_test_types)]
 
-    dz_threshold = df['dz_mean'].quantile(threshold_pids_by_dz_quantile)
-    dz_threshold_pids = df[df['dz_mean'] < dz_threshold]['id'].unique()
+    dz_threshold_pids = df[df['dz_mean'] < threshold_pids_by_d0z]['id'].unique()
     df = df[df['id'].isin(dz_threshold_pids)]
 
     df = df.sort_values('awg_freq', ascending=True)
 
     # plot dz by voltage w/ frequency color bar
-    x, y, c = df[px], df[py1], df[pc]
+    x, y, c = df[px].abs(), df[py1], df[pc]
     vmin, vmax = c.min(), c.max()
     #if vmin < 0.25: vmin = 0.25
     #if vmax > 10e3: vmax = 10e3
@@ -1400,14 +1476,14 @@ def plot_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_dz_quan
     fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$f \: (Hz)$', pad=0.025, )
     ax.set_xlabel(r'$V \: (V)$')
     ax.set_ylabel(r'$\Delta_{o} z \: (\mu m)$')
-    ax.set_title(r'$\Delta_{o} z_{threshold} =$' + str(np.round(dz_threshold, 1)) + r'$\mu m$' + ' (n={})'.format(len(dz_threshold_pids)))
+    ax.set_title(r'$\Delta_{o} z_{threshold} =$' + str(threshold_pids_by_d0z) + r'$\mu m$' + ' (n={})'.format(len(dz_threshold_pids)))
     plt.tight_layout()
     plt.savefig(join(path_save, 'net-d0zr_by_volt-freq_all_pids.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, threshold_pids_by_dz_quantile=0.15,
+def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, threshold_pids_by_d0z=0.0,
                                                           only_test_types=None, shift_V_by_X_log_freq=0,
                                                           arr_model_VdZ=None):
     px, py1, py2, pc = 'output_volt', 'dz_mean', 'dr_mean', 'awg_freq'
@@ -1415,18 +1491,17 @@ def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, thresho
     cmap = mpl.colormaps['plasma']
 
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3']
     df = df[df['test_type'].isin(only_test_types)]
 
-    dz_threshold = df['dz_mean'].quantile(threshold_pids_by_dz_quantile)
-    dz_threshold_pids = df[df['dz_mean'] < dz_threshold]['id'].unique()
+    dz_threshold_pids = df[df['dz_mean'] < threshold_pids_by_d0z]['id'].unique()
     df = df[df['id'].isin(dz_threshold_pids)].sort_values('awg_freq', ascending=True)
 
     dfm = df[['tid', px, py1, py2, pc]].groupby('tid').mean().reset_index()
     dfstd = df[['tid', px, py1, py2, pc]].groupby('tid').std().reset_index()
 
     # plot dz by voltage w/ frequency color bar
-    x, y, c = df[px], df[py1], df[pc]
+    x, y, c = df[px].abs(), df[py1], df[pc]
     vmin, vmax = c.min(), c.max()
     #if vmin < 0.25: vmin = 0.25
     #if vmax > 10e3: vmax = 10e3
@@ -1443,19 +1518,19 @@ def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, thresho
         dfm_tid = dfm[dfm['tid'] == tid]
         dfstd_tid = dfstd[dfstd['tid'] == tid]
         dB = np.log10(dfm_tid[pc]) * shift_V_by_X_log_freq
-        ax.errorbar(dfm_tid[px] + dB, dfm_tid[py1], yerr=dfstd_tid[py1],
+        ax.errorbar(dfm_tid[px].abs() + dB, dfm_tid[py1], yerr=dfstd_tid[py1],
                     color=cmap(norm(dfm_tid[pc])), fmt='o', capsize=2, elinewidth=1, label=tid)
 
     fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$f \: (Hz)$', pad=0.025, )
     ax.set_xlabel(r'$V \pm $' + '{} dB '.format(shift_V_by_X_log_freq) + r'$ (V)$')
     ax.set_ylabel(r'$\Delta_{o} z \: (\mu m)$')
-    ax.set_title(r'$\Delta_{o} z_{threshold} =$' + str(np.round(dz_threshold, 1)) + r'$\mu m$' + ' (n={})'.format(len(dz_threshold_pids)))
+    ax.set_title(r'$\Delta_{o} z_{threshold} =$' + str(threshold_pids_by_d0z) + r'$\mu m$' + ' (n={})'.format(len(dz_threshold_pids)))
     plt.tight_layout()
     plt.savefig(join(path_save, 'errorbars_net-d0zr_by_volt-freq_all_pids__pm{}dB.png'.format(shift_V_by_X_log_freq)),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close(fig)
 
-def plot_heatmap_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_dz_quantile=0.875, only_test_types=None):
+def plot_heatmap_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_d0z=0.0, only_test_types=None):
 
     # Check that required columns exist in the dataframe
     required_columns = {'output_volt', 'awg_freq', 'dz_mean'}
@@ -1463,11 +1538,10 @@ def plot_heatmap_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by
         raise ValueError(f"The dataframe must contain columns: {required_columns}")
 
     if only_test_types is None:
-        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3']
+        only_test_types = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3']
     df = df[df['test_type'].isin(only_test_types)]
 
-    dz_threshold = df['dz_mean'].quantile(threshold_pids_by_dz_quantile)
-    dz_threshold_pids = df[df['dz_mean'] < dz_threshold]['id'].unique()
+    dz_threshold_pids = df[df['dz_mean'] < threshold_pids_by_d0z]['id'].unique()
     df = df[df['id'].isin(dz_threshold_pids)]
 
     # Grouping data by 'output_volt' and 'awg_freq', and averaging 'dz_mean'
@@ -1486,7 +1560,7 @@ def plot_heatmap_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by
     plt.colorbar(label='Mean DZ (dz_mean)')
     plt.xlabel('Output Volt')
     plt.ylabel('AWG Frequency')
-    plt.title('2D Heatmap: AWG Frequency vs Output Volt (Mean DZ, DZ_thresh={})'.format(np.round(dz_threshold, 1)))
+    plt.title('2D Heatmap: AWG Frequency vs Output Volt (Mean DZ, DZ_thresh={})'.format(threshold_pids_by_d0z))
     plt.xticks(ticks=np.arange(len(heatmap_data.columns)), labels=heatmap_data.columns, rotation=90)
     plt.yticks(ticks=np.arange(len(heatmap_data.index)), labels=heatmap_data.index)
     plt.tight_layout()

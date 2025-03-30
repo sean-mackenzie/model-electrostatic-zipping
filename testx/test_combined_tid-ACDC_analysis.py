@@ -5,32 +5,49 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
+import smu, awg
 from utils import plotting, settings
 
-def make_ivac_test_matrix(read_iv, filepath_save):
-    files = [f for f in os.listdir(read_iv) if f.startswith('tid') and f.endswith('_data.xlsx')]
+
+def make_ivacdc_test_matrix(read_settings, filepath_save):
+    files = [f for f in os.listdir(read_settings) if f.startswith('dict_tid') and f.endswith('_settings.xlsx')]
     res = []
     for f in files:
-        tid = int(f.split('_')[0].split('tid')[1])
-        test_type = f.split('_')[1].split('test')[1]
-        output_volt = f.split('_')[2].split('V')[0]
-        awg_freq = f.split('_')[3].split('Hz')[0]
-        awg_wave = f.split('_')[3].split('Hz')[1]
-        res.append([tid, test_type, output_volt, awg_freq, awg_wave])
-    df = pd.DataFrame(res, columns=['tid', 'test_type', 'output_volt', 'awg_freq', 'awg_wave'])
-    df = df.astype({'tid': int, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str})
+        filepath = join(read_settings, f)
+        df_ = pd.read_excel(filepath)
+        if 'awg_wave' in df_['k'].values:
+            s = awg.read_settings_to_dict(filepath=filepath)
+            if 'awg_mod_ampl_dwell' in s.keys():
+                dwell = s['awg_mod_ampl_dwell']
+            elif 'awg_mod_ampl_dwell_on' in s.keys():
+                dwell = s['awg_mod_ampl_dwell_on']
+            else:
+                raise ValueError('awg_mod_ampl_dwell or awg_mod_ampl_dwell_on not found in settings file.')
+            res.append([s['tid'], 'AC', s['test_type'], s['output_volt'], s['awg_freq'], s['awg_wave'],
+                        dwell, s['awg_mod_ampl_step'], s['awg_mod_ampl_num_steps']])
+        else:
+            s = smu.read_settings_to_dict(filepath=filepath)
+            res.append([s['tid'], 'DC', s['smu_test_type'], s['smu_vmax'], 0.1, 'SQU',
+                        s['smu_source_delay_time'], s['smu_dv'], s['smu_step_max']])
+
+    df = pd.DataFrame(res, columns=['tid', 'acdc', 'test_type', 'output_volt', 'awg_freq', 'awg_wave',
+                                    'ampl_dwell_time', 'ampl_dv', 'ampl_num_steps'])
+    df = df.astype({'tid': int, 'acdc': str, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str,
+                    'ampl_dwell_time': float, 'ampl_dv': float, 'ampl_num_steps': int})
+    df = df.sort_values(by='tid', ascending=True)
     df.to_excel(filepath_save, index=False)
     return df
 
-def get_ivac_test_matrix(base_dir, save_dir):
-    read_iv = join(base_dir, 'I-V', 'xlsx')
-    fp_iv_matrix = join(save_dir, 'iv_test_matrix.xlsx')
+def get_ivacdc_test_matrix(base_dir, save_dir):
+    read_settings = join(base_dir, 'analyses', 'settings')
+    fp_iv_matrix = join(save_dir, 'iv_acdc_test_matrix.xlsx')
     if not os.path.exists(fp_iv_matrix):
-        df_iv_matrix = make_ivac_test_matrix(read_iv=read_iv, filepath_save=fp_iv_matrix)
+        df_iv_matrix = make_ivacdc_test_matrix(read_settings=read_settings, filepath_save=fp_iv_matrix)
     else:
         df_iv_matrix = pd.read_excel(fp_iv_matrix)
         df_iv_matrix = df_iv_matrix.astype(
-            {'tid': int, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str})
+            {'tid': int, 'acdc': str, 'test_type': str, 'output_volt': int, 'awg_freq': float, 'awg_wave': str,
+                    'ampl_dwell_time': float, 'ampl_dv': float, 'ampl_num_steps': int})
     return df_iv_matrix
 
 def get_tids_from_iv_matrix(df_iv_matrix, dict_test_group):
@@ -71,7 +88,8 @@ def get_all_combinations_from_iv_matrix(df_iv_matrix, min_number_per_group, base
     fp_iv_matrix_combinations = join(save_dir, fn_iv_matrix_combinations)
 
     if df_iv_matrix is None:
-        df_iv_matrix = get_ivac_test_matrix(base_dir=base_dir, save_dir=save_dir)
+        df_iv_matrix = get_ivacdc_test_matrix(base_dir=base_dir, save_dir=save_dir)
+        # df_iv_matrix = df_iv_matrix[['acdc', 'test_type', 'output_volt', 'awg_freq', 'awg_wave', 'ampl_dwell_time', 'ampl_dv']]
     combinations = find_all_combinations_from_iv_matrix(df=df_iv_matrix, min_number_per_group=min_number_per_group)
 
     if not os.path.exists(fp_iv_matrix_combinations):
@@ -114,7 +132,7 @@ def get_joined_merged_coords_volt_and_iv_matrix(df_merged_coords_volt, df_iv_mat
         if df_merged_coords_volt is None:
             df_merged_coords_volt = get_all_merged_coords_volt(base_dir, save_dir)
         if df_iv_matrix is None:
-            df_iv_matrix = get_ivac_test_matrix(base_dir=base_dir, save_dir=save_dir)
+            df_iv_matrix = get_ivacdc_test_matrix(base_dir=base_dir, save_dir=save_dir)
         df = df_merged_coords_volt.join(df_iv_matrix.set_index('tid'), on='tid', how='left', lsuffix='_mcv', rsuffix='_iv')
         df.to_excel(filepath, index=False)
     return df
@@ -153,7 +171,7 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
         if df_net_d0zr_per_pid is None:
             df_net_d0zr_per_pid = get_all_net_d0zr_per_pid(base_dir=base_dir, save_dir=save_dir, xym=xym)
         if df_iv_matrix is None:
-            df_iv_matrix = get_ivac_test_matrix(base_dir=base_dir, save_dir=save_dir)
+            df_iv_matrix = get_ivacdc_test_matrix(base_dir=base_dir, save_dir=save_dir)
         df = df_net_d0zr_per_pid.join(df_iv_matrix.set_index('tid'), on='tid', how='left', lsuffix='_net', rsuffix='_iv')
         df.to_excel(filepath, index=False)
     return df
@@ -161,23 +179,21 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 
 
 if __name__ == "__main__":
-    #TODO: scatter plot (per-pid) of voltage vs. z-position for all tests:
-    # (DC tests will reveal little dependence b/c hysteresis. AC tests should show good dependence.)
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
+    TEST_CONFIG = '0112025_W11-B1_C9-0pT'
 
     # Model params
-    MKEY, MVAL, VMAX = 'pre_stretch', 1.263, 225  # if VMAX is lower than model's Vmax, then do nothing
+    MKEY, MVAL, VMAX = 'pre_stretch', 1.01, 200  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
-    ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3']
+    ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None  # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_DZ_QUANTILE = 0.1  # b/c dz is negative, smaller quantiles correspond to larger deflections
+    THRESHOLD_PIDS_BY_D0Z = -75  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = False
+    ALL_TRUE = True
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -223,7 +239,7 @@ if __name__ == "__main__":
     SAVE_COMBINED_NET_D0ZR = join(SAVE_COMBINED, 'net-d0zr_per_pid_per_tid')
     XYM = 'g'  # 'g' or 'm': use sub-pixel or discrete in-plane localization method
     # filenames
-    FN_IV_MATRIX = 'iv_test_matrix.xlsx'
+    FN_IV_MATRIX = 'iv_acdc_test_matrix.xlsx'
     FN_IV_MATRIX_COMBINATIONS = 'iv_test_matrix_combinations_n={}.xlsx'
     FN_ALL_MERGED_COORDS_VOLT = 'all_merged-coords-volt.xlsx'
     FN_ALL_NET_D0ZR_PER_PID = 'all_net-d0zr_per_pid.xlsx'
@@ -251,16 +267,7 @@ if __name__ == "__main__":
     # ---
     # make iv test matrix
     if make_ivac_matrix:
-        DF_IV_MATRIX = get_ivac_test_matrix(base_dir=BASE_DIR, save_dir=SAVE_COMBINED)
-
-        export_groups = False
-        if export_groups:
-            results = find_all_combinations_from_iv_matrix(df=DF_IV_MATRIX, min_number_per_group=3)
-            results_df = pd.DataFrame(results)  # Convert the results list into a pandas DataFrame
-            # Split the 'group_definition' dictionary into individual columns in the DataFrame
-            group_defs = pd.DataFrame(results_df['group_definition'].tolist())
-            final_results_df = pd.concat([results_df.drop(columns=['group_definition']), group_defs], axis=1)
-            final_results_df.to_excel(join(SAVE_COMBINED, 'iv_test_matrix_grouped-n=3.xlsx'), index=False)
+        DF_IV_MATRIX = get_ivacdc_test_matrix(base_dir=BASE_DIR, save_dir=SAVE_COMBINED)
     # make iv test matrix combinations
     if make_ivac_matrix_combinations:
         COMBINATIONS = get_all_combinations_from_iv_matrix(
@@ -315,7 +322,7 @@ if __name__ == "__main__":
             plotting.plot_net_d0zr_all_pids_by_volt_freq(
                 df=DFDIV,
                 path_save=SAVE_COMBINED_NET_D0ZR,
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 only_test_types=ONLY_TEST_TYPES,
                 arr_model_VdZ=ARR_MODEL_VDZ,
             )
@@ -324,7 +331,7 @@ if __name__ == "__main__":
                 plotting.plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(
                     df=DFDIV,
                     path_save=SAVE_COMBINED_NET_D0ZR,
-                    threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                    threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                     only_test_types=ONLY_TEST_TYPES,
                     shift_V_by_X_log_freq=shift_V_by_X_log_freq,
                     arr_model_VdZ=ARR_MODEL_VDZ,
@@ -334,7 +341,7 @@ if __name__ == "__main__":
             plotting.plot_heatmap_net_d0zr_all_pids_by_volt_freq(
                 df=DFDIV,
                 path_save=SAVE_COMBINED_NET_D0ZR,
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 only_test_types=ONLY_TEST_TYPES,
             )
 
@@ -380,7 +387,7 @@ if __name__ == "__main__":
                 df_mcviv=DF_MCVIV,
                 combinations=COMBINATIONS,
                 only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 path_save=SAVE_SUB_ANALYSIS,
             )
 
@@ -391,7 +398,7 @@ if __name__ == "__main__":
             plotting.plot_merged_coords_volt_per_pid_by_volt_freq(
                 df=DF_MCVIV,
                 path_save=SAVE_SUB_ANALYSIS,
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
                 only_test_types=ONLY_TEST_TYPES,
                 arr_model_VdZ=ARR_MODEL_VDZ,
@@ -401,7 +408,7 @@ if __name__ == "__main__":
             plotting.plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(
                 df=DF_MCVIV,
                 path_save=SAVE_COMBINED_MCV,
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 only_test_types=ONLY_TEST_TYPES,
                 save_id='ascending+descending',
             )
@@ -419,7 +426,7 @@ if __name__ == "__main__":
             plotting.plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(
                 df=df_ascending,
                 path_save=SAVE_COMBINED_MCV,
-                threshold_pids_by_dz_quantile=THRESHOLD_PIDS_BY_DZ_QUANTILE,
+                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                 only_test_types=ONLY_TEST_TYPES,
                 save_id='ascending-only',
             )
