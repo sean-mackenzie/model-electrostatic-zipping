@@ -29,6 +29,29 @@ def export_net_d0zr_per_pid_per_tid(df, xym, tid, dict_settings, dict_test, path
     )
 
 
+def get_surface_profile_dict(dict_settings):
+    if 'fid_process_profile' in dict_settings.keys():
+        surf_fid_override = dict_settings['fid_process_profile']
+    else:
+        surf_fid_override = None
+    surf_profile_subset = 'right_half'  # 'full', 'left_half', 'right_half'
+    surf_shift_r, surf_shift_z, surf_scale_z = 0, 0, 1
+    include_hole = True
+    if surf_profile_subset == 'full':
+        include_hole = False
+
+    df_surface = empirical.read_surface_profile(
+        dict_settings,
+        subset=surf_profile_subset,
+        hole=include_hole,
+        fid_override=surf_fid_override,
+    )
+    dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(),
+                                 'dr': surf_shift_r, 'dz': surf_shift_z, 'scale_z': surf_scale_z,
+                                 'subset': surf_profile_subset}
+    return dict_surface_profilometry
+
+
 def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_frames=None, animate_rzdr=None):
     # assign simple column labels
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
@@ -41,6 +64,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     df_model_VdZ = None
     df_model_strain = None
     plot_scatter_xy_by_frame = False
+    plot_depth_dependent_in_plane_stretch_w_rotation_correction = True  # This can always be true
     # -
     if animate_frames is not None:
         pass
@@ -61,6 +85,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             plot_depth_dependent_in_plane_stretch = True
             plot_pids_dr_by_dz = True
             plot_pids_dz_by_voltage_hysteresis = True
+            plot_normalized_membrane_profile, frois_norm_profile = False, []
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
@@ -91,33 +117,35 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         plot_pids_dz_by_voltage_hysteresis = False
         plot_normalized_membrane_profile, frois_norm_profile = False, []
         plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
+
     # -
     only_pids = None  # if [1, 2...], then remove these pids from df, dfd, and dfd0 before plotting; None: keep all pids
     not_pids = []  # if [], then keep all pids in df, dfd, and dfd0 for plotting; [1, 2...]: remove before plotting
-    only_per_pid_plot_these_pids = [1, 2, 5, 14, 20, 17, 12, 33, 27, 19, 43, 40]  # None; if [1, 2...], then plot only these pids for per-pid trajectory plots
+    only_per_pid_plot_these_pids = None  # None; if [1, 2...], then plot only these pids for per-pid trajectory plots
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 8
+    average_max_n_positions = 20
     # -
-    model_mkey, model_mval = 'pre_stretch', 1.146  # None, Non; 'E', 1.1e6
+    model_mkey, model_mval = 'pre_stretch', 1.01  # None; 'E', 1.1e6
     # -
-    plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
+    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
-    plot_single_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_by_synchronous_time_voltage = True
-    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
+    plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
+    plot_pids_by_synchronous_time_voltage = False
+    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
-    plot_quiver_xy_by_frame = True
-    plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    plot_quiver_xy_by_frame = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = False
     show_zipping_interface = True
     dr_ampl = 10
     fit_spline_to_memb = False
     test_description = dict_test['filename'].split('.xlsx')[0].split('_data')[0].replace('_', ' ')
     if (plot_quiver_xy_by_frame or plot_1D_dz_by_r_by_frame_with_surface_profile or
             plot_normalized_membrane_profile or plot_1D_dz_by_r_by_frois_with_surface_profile):
+        """
         if 'fid_process_profile' in dict_settings.keys():
             surf_fid_override = dict_settings['fid_process_profile']
         else:
@@ -137,6 +165,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(),
                                      'dr': surf_shift_r, 'dz': surf_shift_z, 'scale_z': surf_scale_z,
                                      'subset': surf_profile_subset}
+        """
+        dict_surface_profilometry = get_surface_profile_dict(dict_settings)
+
     if fit_spline_to_memb:
         # get radial position of n-th inner-most particle
         faux_is_average_of_n = 5
@@ -193,6 +224,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
+            plot_depth_dependent_in_plane_stretch_w_rotation_correction = False
 
     # -
     path_results_rep = join(path_results.format(tid), 'xy' + xym)
@@ -203,6 +235,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # data slice
     path_results_compare_dZ_by_V = join(path_results_slice, 'compare_dZ_by_V_with_model')
     path_results_depth_dependent_in_plane_stretch = join(path_results_slice, 'depth-dependent-in-plane-stretch')
+    path_results_depth_dependent_in_plane_stretch_w_rotation_correction = join(path_results_slice, 'w_rotation_correction')
     path_results_pids_by_X = join(path_results_slice, 'pids_by_X')
     # particle trajectories
     path_results_pids_by_frame = join(path_results_per_pid, 'pids_by_frame')
@@ -224,9 +257,11 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     path_results_1D_dz_by_r_by_frame_w_surf = join(path_results_rz, f'1D_{przdr[1]}{przdr[2]}-r_by_frame_w-surf+dr{dr_ampl}X')
     path_results_1D_dz_by_r_by_frois_w_surf = join(path_results_rz, f'1D_{przdr[1]}{przdr[2]}-r_by_frois_w-surf')
     # -
+
     # make directories
     pths = [path_results_rep, path_results_per_pid, path_results_xy, path_results_rz,
-            path_results_compare_dZ_by_V, path_results_depth_dependent_in_plane_stretch, path_results_pids_by_X,
+            path_results_compare_dZ_by_V, path_results_depth_dependent_in_plane_stretch,
+            path_results_depth_dependent_in_plane_stretch_w_rotation_correction, path_results_pids_by_X,
             path_results_pids_by_frame, path_results_pids_dr_by_dz,
             path_results_pids_by_synchronous_time_voltage, path_results_pids_by_synchronous_time_voltage_monitor,
             path_results_pids_dz_by_voltage_hysteresis, path_results_pids_dzdr_by_voltage_hysteresis,
@@ -236,7 +271,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             path_results_1D_dznorm_by_r_by_frois,
             path_results_1D_dz_by_r_by_frame_w_surf, path_results_1D_dz_by_r_by_frois_w_surf]
     mods = [True, True, True, True,
-            compare_pull_in_voltage_with_model, plot_depth_dependent_in_plane_stretch, plot_all_pids_by_X,
+            compare_pull_in_voltage_with_model, plot_depth_dependent_in_plane_stretch,
+            plot_depth_dependent_in_plane_stretch_w_rotation_correction, plot_all_pids_by_X,
             plot_single_pids_by_frame, plot_pids_dr_by_dz,
             plot_pids_by_synchronous_time_voltage, plot_pids_by_synchronous_time_voltage_monitor,
             plot_pids_dz_by_voltage_hysteresis, plot_pids_dz_by_voltage_hysteresis,
@@ -342,6 +378,42 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     path_results=path_results_depth_dependent_in_plane_stretch,
                     save_id='dfd',
                 )
+
+                if plot_depth_dependent_in_plane_stretch_w_rotation_correction:
+                    dict_surface_profilometry = get_surface_profile_dict(dict_settings)
+                    surf_r, surf_z = dict_surface_profilometry['r'], dict_surface_profilometry['z']
+                    for poly_deg in [3, 5]:
+                        func_apparent_r_displacement = empirical.calculate_apparent_radial_displacement_due_to_rotation(
+                            surf_r=surf_r,
+                            surf_z=surf_z,
+                            poly_deg=poly_deg,
+                            membrane_thickness=dict_settings['membrane_thickness'],
+                            z_clip=-0.25,
+                            path_save=path_results_depth_dependent_in_plane_stretch_w_rotation_correction,
+                        )
+
+                        dfd0_corr = dfd0.copy()
+                        dfd0_corr['dr_corr'] = func_apparent_r_displacement(dfd0_corr[pr])
+                        dfd0_corr['dr_mean_corr'] = dfd0_corr['dr_mean'] + dfd0_corr['dr_corr']
+                        dfd0_corr = dfd0_corr.drop(columns=['id', 'xg', 'yg', 'rg_mean_f', 'z_mean_f',
+                                                            'r_strain', 'drdz', 'start_frame_i', 'start_frame_f',
+                                                            'end_frame_i', 'end_frame_f', 'average_max_n_positions',])
+                        plotting.compare_corrected_depth_dependent_in_plane_stretch_with_model(
+                            dfd=dfd0_corr,
+                            dfm=df_model_strain,
+                            path_results=path_results_depth_dependent_in_plane_stretch_w_rotation_correction,
+                            save_id='dfd0_corr-dr_poly-deg={}'.format(poly_deg),
+                        )
+
+                        dfd_corr = dfd.copy()
+                        dfd_corr['dr_corr'] = func_apparent_r_displacement(dfd_corr[pr])
+                        dfd_corr['dr_mean_corr'] = dfd_corr['dr_mean'] + dfd_corr['dr_corr']
+                        plotting.compare_corrected_depth_dependent_in_plane_stretch_with_model(
+                            dfd=dfd_corr,
+                            dfm=df_model_strain,
+                            path_results=path_results_depth_dependent_in_plane_stretch_w_rotation_correction,
+                            save_id='dfd_corr-dr_poly-deg={}'.format(poly_deg),
+                        )
 
         if plot_all_pids_by_X:
             for X in Xs:

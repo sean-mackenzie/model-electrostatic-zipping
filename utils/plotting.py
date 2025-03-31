@@ -252,6 +252,43 @@ def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=N
     plt.close()
 
 
+def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, save_id):
+    # --- 3D DPT data
+    pdz, pdr, pdr_corr, dr_corr = 'dz_mean', 'dr_mean', 'dr_mean_corr', 'dr_corr'
+    x, y3, y3_corr, dy3_corr = dfd[pdz].abs(), dfd[pdr], dfd[pdr_corr], dfd[dr_corr]
+    # --- Model data
+    # for radial displacement, we want all data
+    mx3 = dfm['dZ'].to_numpy() * 1e6
+    my3 = dfm['disp_r_microns'].to_numpy()
+
+    # --- plot
+
+    fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(5, 6))
+
+    ax0.plot(x, dy3_corr, 'ko', ms=1)
+    ax0.set_ylabel(r'$\Delta_{corr} r \: (\mu m)$')
+    ax0.grid(alpha=0.15)
+
+    ax1.plot(mx3, my3, 'k-', label='Model')
+    ax1.plot(x, y3, 'bs', ms=1, label='Raw')
+    ax1.plot(x, y3_corr, 'ro', ms=1, label='Corrected')
+    ax1.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax1.grid(alpha=0.15)
+    ax1.legend(fontsize='x-small', loc='upper left')
+
+    ax2.plot(mx3, my3, 'k-', label='Model')
+    ax2.plot(x, y3_corr, 'ro', ms=1, label='Corrected')
+    ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax2.set_xlabel(r'$ z \: (\mu m)$')
+    ax2.grid(alpha=0.15)
+    ax2.legend(fontsize='x-small', loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(join(path_results, f'compare_corrected_depth_dependent_in_plane_stretch_with_model_{save_id}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
 def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, save_id):
     # --- 3D DPT data
     pdz, pdr, pr_strain = 'dz_mean', 'dr_mean', 'r_strain'

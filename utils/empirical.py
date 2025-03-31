@@ -97,6 +97,24 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
 
     return df
 
+def get_surface_profile_dict(dict_settings, subset='right', include_hole=True, shift_r=0, shift_z=0, scale_z=1):
+    if 'fid_process_profile' in dict_settings.keys():
+        surf_fid_override = dict_settings['fid_process_profile']
+    else:
+        surf_fid_override = None
+    if subset == 'full':
+        include_hole = False
+
+    df_surface = read_surface_profile(
+        dict_settings,
+        subset=subset,
+        hole=include_hole,
+        fid_override=surf_fid_override,
+    )
+    dict_surface_profilometry = {'r': df_surface['r'].to_numpy(), 'z': df_surface['z'].to_numpy(),
+                                 'dr': shift_r, 'dz': shift_z, 'scale_z': scale_z,
+                                 'subset': subset}
+    return dict_surface_profilometry
 
 def get_zipping_interface_r_from_z(z0, surf_r, surf_z, z0_max=-0.01):
     if z0 > z0_max:
@@ -146,4 +164,88 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
     except IndexError:
         pass
     return zipping_interface_r, zipping_interface_z
+
+
+def get_apparent_radial_displacement_due_to_rotation_function(surf_r, surf_z, poly_deg, membrane_thickness, z_clip=-0.25):
+    # Clip surface profile data to only include the sloped portion
+    x = surf_r[surf_z < z_clip]
+    y = surf_z[surf_z < z_clip]
+
+    # Fit data to a polynomial
+    coefficients = np.polyfit(x, y, deg=poly_deg)
+    polynomial = np.poly1d(coefficients)
+
+    # Derivative of the fitted polynomial
+    polynomial_derivative = polynomial.deriv()
+
+    # Define a function that gives the apparent radial displacement
+    def apparent_radial_displacement(r):
+        r_bounds = (np.min(x), np.max(x))
+        if r < r_bounds[0] or r > r_bounds[1]:
+            return 0
+        else:
+            return membrane_thickness * np.sin(np.arctan(polynomial_derivative(r)))
+
+    return apparent_radial_displacement
+
+
+def calculate_apparent_radial_displacement_due_to_rotation(surf_r, surf_z, poly_deg, membrane_thickness, z_clip=-0.25,
+                                                           path_save=None):
+    # Clip surface profile data to only include the sloped portion
+    x = surf_r[surf_z < z_clip]
+    y = surf_z[surf_z < z_clip]
+
+    # Fit data to a polynomial
+    coefficients = np.polyfit(x, y, deg=poly_deg)
+    polynomial = np.poly1d(coefficients)
+
+    # Derivative of the fitted polynomial
+    polynomial_derivative = polynomial.deriv()
+
+    # Define a function that gives the apparent radial displacement
+    def apparent_radial_displacement(r):
+        rmin, rmax = x.min(), x.max()
+        # Define a helper function
+        def process_element(xn, lower_limit, upper_limit):
+            if lower_limit <= xn <= upper_limit:
+                return membrane_thickness * np.sin(np.arctan(polynomial_derivative(xn)))
+            return 0
+        return r.apply(lambda xm: process_element(xm, lower_limit=rmin, upper_limit=rmax))
+
+    # Angle calculated from slope using arctan
+    angle_radians = np.arctan(polynomial_derivative(x))  # Angle in radians
+    angle_degrees = np.degrees(angle_radians)  # Convert to degrees
+
+    # Apparent radial displacement calculated from membrane thickness + slope angle
+    apparent_displacement = membrane_thickness * np.sin(angle_radians)
+
+    # Plotting original data, fitted function, and derivative
+    import matplotlib.pyplot as plt
+    from os.path import join
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(7, 8))
+    # ax1.scatter(x, y, s=4, alpha=0.95, label='Surface profile')
+    ax1.plot(x, y, 'k-', label='Surface profile')
+    ax1.plot(x, polynomial(x), 'r--', label=f'{poly_deg}-deg Polynominal')
+    ax2.plot(x, polynomial_derivative(x), label='Derivative (Slope)', color='green', linestyle='--')
+    ax3.plot(x, angle_degrees, label='Angle (degrees)', color='purple')
+    ax4.plot(x, apparent_displacement, label='Apparent Displacement', color='orange')
+    ax4.axvline(x.min(), label='rmin={}'.format(np.round(x.min(), 1)), color='k', lw=0.5, linestyle='--')
+    ax4.axvline(x.max(), label='rmax={}'.format(np.round(x.max(), 1)), color='k', lw=0.5, linestyle='--')
+    ax1.legend()
+    ax2.legend()
+    ax4.legend(fontsize='small', loc='upper left')
+    ax1.set_ylabel(r'$z \: (\mu m)$')
+    ax2.set_ylabel('slope')
+    ax3.set_ylabel('angle (degrees)')
+    ax4.set_ylabel(r'$\Delta_{rot} r \: (\mu m)$')
+    ax4.set_xlabel(r'$r \: (\mu m)$')
+    plt.tight_layout()
+    if path_save is not None:
+        plt.savefig(join(path_save, f'apparent_radial_displacement_deg={poly_deg}.png'),
+                    dpi=300, facecolor='w', bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+    return apparent_radial_displacement
 
