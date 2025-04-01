@@ -81,6 +81,8 @@ def get_dict_dtypes():
         'fid_process_profile': int,
         'step_process_profile': int,
         'path_model': str,
+        'model_mkey': str,
+        'model_mval': float,
         'path_model_settings': str,
         'path_model_dZ_by_V': str,
         'path_model_strain': str,
@@ -110,7 +112,7 @@ def get_dict_dtype_list(data_type):
     if data_type == 'int':
         keys = ['fid', 'image_size', 'padding', 'drop_first_n_frames', 'fid_process_profile', 'step_process_profile']
     elif data_type == 'str':
-        keys = ['feature_label']  #, 'path_process_profiles', 'path_image_overlay', 'path_model', 'path_model_settings', 'path_model_dZ_by_V', 'path_model_strain']
+        keys = ['feature_label', 'model_mkey']  #, 'path_process_profiles', 'path_image_overlay', 'path_model', 'path_model_settings', 'path_model_dZ_by_V', 'path_model_strain']
     elif data_type == 'path':
         keys = ['path_process_profiles', 'path_image_overlay', 'path_model',
                 'path_model_settings', 'path_model_dZ_by_V', 'path_model_strain']

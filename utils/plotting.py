@@ -252,7 +252,24 @@ def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=N
     plt.close()
 
 
-def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, save_id):
+def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, correction_function, pr, path_results, save_id,
+                                                                  dfd_id, poly_deg_id):
+    if dfd_id == 'dfd':
+        ylabel = r'$\Delta r \: (\mu m)$'
+        xlabel = r'$\Delta z \: (\mu m)$'
+    elif dfd_id == 'dfd0':
+        ylabel = r'$\Delta_{o} r \: (\mu m)$'
+        xlabel = r'$\Delta_{o} z \: (\mu m)$'
+    else:
+        raise ValueError('dfd or dfd_id must be specified')
+
+
+    dfd['dr_corr'] = correction_function(dfd[pr])
+    dfd['dr_mean_corr'] = dfd['dr_mean'] + dfd['dr_corr']
+    dfd = dfd.drop(columns=['id', 'xg', 'yg', 'rg_mean_f', 'z_mean_f',
+                            'r_strain', 'drdz', 'start_frame_i', 'start_frame_f',
+                            'end_frame_i', 'end_frame_f', 'average_max_n_positions'])
+
     # --- 3D DPT data
     pdz, pdr, pdr_corr, dr_corr = 'dz_mean', 'dr_mean', 'dr_mean_corr', 'dr_corr'
     x, y3, y3_corr, dy3_corr = dfd[pdz].abs(), dfd[pdr], dfd[pdr_corr], dfd[dr_corr]
@@ -260,31 +277,37 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path
     # for radial displacement, we want all data
     mx3 = dfm['dZ'].to_numpy() * 1e6
     my3 = dfm['disp_r_microns'].to_numpy()
+    dfm['dr_corr'] = correction_function(dfm['x_i'] * 1e6 / 2)
+    dfm['disp_r_microns_corr'] = dfm['disp_r_microns'] - dfm['dr_corr']
+    my3_corr = dfm['disp_r_microns_corr'].to_numpy()
 
     # --- plot
+    lw = 0.75
+    ms = 2
 
     fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(5, 6))
 
-    ax0.plot(x, dy3_corr, 'ko', ms=1)
+    ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})')
+    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Data')
     ax0.set_ylabel(r'$\Delta_{corr} r \: (\mu m)$')
     ax0.grid(alpha=0.15)
+    ax0.legend(fontsize='xx-small', loc='upper right')
 
-    ax1.plot(mx3, my3, 'k-', label='Model')
-    ax1.plot(x, y3, 'bs', ms=1, label='Raw')
-    ax1.plot(x, y3_corr, 'ro', ms=1, label='Corrected')
-    ax1.set_ylabel(r'$\Delta r \: (\mu m)$')
+    ax1.plot(mx3, my3, 'k-', lw=lw, label='Model-Raw')
+    ax1.plot(x, y3_corr, 'ro', ms=ms, label='Data-Corrected')
+    ax1.set_ylabel(ylabel)
     ax1.grid(alpha=0.15)
-    ax1.legend(fontsize='x-small', loc='upper left')
+    ax1.legend(fontsize='xx-small', loc='upper left')
 
-    ax2.plot(mx3, my3, 'k-', label='Model')
-    ax2.plot(x, y3_corr, 'ro', ms=1, label='Corrected')
-    ax2.set_ylabel(r'$\Delta r \: (\mu m)$')
-    ax2.set_xlabel(r'$ z \: (\mu m)$')
+    ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected')
+    ax2.plot(x, y3, 'ko', ms=ms, label='Data-Raw')
+    ax2.set_ylabel(ylabel)
+    ax2.set_xlabel(xlabel)
     ax2.grid(alpha=0.15)
-    ax2.legend(fontsize='x-small', loc='upper left')
+    ax2.legend(fontsize='xx-small', loc='upper left')
 
     plt.tight_layout()
-    plt.savefig(join(path_results, f'compare_corrected_depth_dependent_in_plane_stretch_with_model_{save_id}.png'),
+    plt.savefig(join(path_results, f'compare_tilt-corrected_{save_id}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
 
@@ -1001,7 +1024,7 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, dict_surf, frame
     clrs = [mpl.cm.coolwarm(norm(x)) for x in dz_frames]
     # ---
     # plot
-    fig, ax = plt.subplots(figsize=(5.5, 2.75))
+    fig, ax = plt.subplots(figsize=(6.5, 3))
 
     for frame, clr, dz_frame in zip(frames, clrs, dz_frames):
         df_frame = df[df['frame'] == frame].sort_values(pr)
@@ -1047,7 +1070,8 @@ def plot_dz_by_r_by_frois_normalize_membrane_profile(df, przdr, dict_surf, frame
     ax.set_ylim(y_lim)
     ax.grid(alpha=0.0625)
     # ax.set_title('frames: {}'.format(frames))
-    ax.legend(title=r'$V_{app}: \Delta z$', loc='upper left', fontsize='xx-small', ncols=len(frames))
+    ax.legend(title=r'$V_{app}: \Delta z$', loc='upper center', fontsize='xx-small', ncols=len(frames),
+              borderpad=0.25, labelspacing=0.3, handlelength=1, handletextpad=0.3, borderaxespad=0.4, columnspacing=1.25)
     plt.tight_layout()
     plt.savefig(join(path_save, 'dz-norm-r_by_frois{}_legend-voltage.png'.format(frames)),
                 dpi=300, facecolor='w')
@@ -1295,7 +1319,11 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
     # if vmin < 0.25: vmin = 0.25
     # if vmax > 10e3: vmax = 10e3
     # norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    norm = colors.LogNorm(vmin=vmin, vmax=vmax)
+    if vmin == vmax:
+        set_title = 'All TIDs {} Hz'.format(df[pc].mean())
+    else:
+        set_title = None
+        norm = colors.LogNorm(vmin=vmin, vmax=vmax)
 
     # filter z-displacement
     if only_pids is None:
@@ -1307,7 +1335,7 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
         tids = df_pid['tid'].unique()
 
         # initialize figure
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(5, 3.75))
         # plot model
         if arr_model_VdZ is not None:
             ax.plot(arr_model_VdZ[0], arr_model_VdZ[1], 'k-', label='Model')
@@ -1315,10 +1343,17 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
         for tid in tids:
             df_pid_tid = df_pid[df_pid['tid'] == tid].reset_index(drop=True)
             df_pid_tid = df_pid_tid[df_pid_tid['STEP'] <= df_pid_tid['STEP'].iloc[df_pid_tid['VOLT'].abs().idxmax()]]
-            ax.plot(df_pid_tid[dx].abs(), df_pid_tid[dy], 'o', ms=1.5, label=tid,
-                    color=cmap(norm(df_pid_tid[pc].iloc[0])))
-
-        fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$f \: (Hz)$', pad=0.025, )
+            if set_title is None:
+                ax.plot(df_pid_tid[dx].abs(), df_pid_tid[dy], 'o', ms=1.5, label=tid,
+                        color=cmap(norm(df_pid_tid[pc].iloc[0])))
+            else:
+                ax.plot(df_pid_tid[dx].abs(), df_pid_tid[dy], 'o', ms=1.5, label=tid)
+        if set_title is None:
+            fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax, label=r'$f \: (Hz)$', pad=0.025, )
+            ax.set_title('PID: {}'.format(pid))
+        else:
+            ax.set_title(set_title + ': PID: {}'.format(pid))
+            ax.legend(title='TID', fontsize='small')
         ax.set_xlabel(r'$V \: (V)$')
         ax.set_ylabel(r'$z \: (\mu m)$')
         ax.grid(alpha=0.25)

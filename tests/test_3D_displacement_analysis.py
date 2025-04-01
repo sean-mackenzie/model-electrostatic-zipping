@@ -15,44 +15,36 @@ if __name__ == "__main__":
     """
     NOTES:
         1. requires: analyses/settings/dict_settings.xlsx
+        2. requires: MODEL_MKEY, MODEL_MVAL = 'pre_stretch', 1.01 
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01082025_W5-D1_C9-0pT'
-    TIDS = [2]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '01272025_W5-D1_C7-20pT'
+    TIDS = [4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     IV_ACDC = 'DC'  # 'AC' or 'DC'
     ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     # -
     # SETTINGS (True False)
-    VERIFY_SETTINGS = False  # only need to run once per test configuration
     UPDATE_DEPENDENT = False  # True: update all dependent settings in dict_settings.xlsx
+    PLOT_SETTINGS_IMAGE_OVERLAY = False  # only need to run once per test configuration
     # -
     # PRE-PROCESSING (True False)
-    PRE_PROCESS_COORDS = False  # If you change andor_keithley_delay time, you must pre-process coords.
-    PRE_PROCESS_IV = False  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
-    MERGE_COORDS_AND_VOLTAGE = False
+    PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
+    PRE_PROCESS_IV = True  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
+    MERGE_COORDS_AND_VOLTAGE = True
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
-    SECOND_PASS = True  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = False, 5  # True: export dfd0 to special directory
+    SECOND_PASS = False  # True False
+    EXPORT_NET_D0ZR, AVG_MAX_N = True, 2  # True: export dfd0 to special directory
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 2  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (50, 75), (170, 200)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
-
-    # SURFACE PROFILE
-    # used for correcting apparent radial displacement
-    # Note: I should add these variables to DICT_SETTINGS
-    subset = 'right'
-    include_hole = True
-    shift_r = 0
-    shift_z = 0
-    scale_z = 1
+    START_FRAME, END_FRAMES = (0, 6), (25, 30)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -170,30 +162,6 @@ if __name__ == "__main__":
                     DF = dpt.calculate_lock_in_rolling_min(
                         df=DF, pcols=['dz', 'd0z'], settings=DICT_SETTINGS, test_settings=DICT_TEST)
 
-                    # calculate membrane-rotation-corrected radial displacement
-                    # NOTE: the correction shouldn't be applied until the membrane zips in
-                    # So, this needs to be applied in conjunction with get_zipping_interface()
-                    # Which is not an easy task.
-                    """
-                    dict_surface_profilometry = empirical.get_surface_profile_dict(
-                        DICT_SETTINGS, subset, include_hole, shift_r, shift_z, scale_z)
-                    for poly_deg in [5, 3]:
-                        func_apparent_r_displacement = empirical.calculate_apparent_radial_displacement_due_to_rotation(
-                            surf_r=dict_surface_profilometry['r'],
-                            surf_z=dict_surface_profilometry['z'],
-                            poly_deg=poly_deg,
-                            membrane_thickness=DICT_SETTINGS['membrane_thickness'],
-                            z_clip=-0.25,
-                            path_save=SAVE_SETTINGS,
-                        )
-                        
-                        dfd0_corr = dfd0.copy()
-                        dfd0_corr['dr_corr'] = func_apparent_r_displacement(dfd0_corr[pr])
-                        dfd0_corr['dr_mean_corr'] = dfd0_corr['dr_mean'] + dfd0_corr['dr_corr']
-                        dfd0_corr = dfd0_corr.drop(columns=['id', 'xg', 'yg', 'rg_mean_f', 'z_mean_f',
-                                                            'r_strain', 'drdz', 'start_frame_i', 'start_frame_f',
-                                                            'end_frame_i', 'end_frame_f', 'average_max_n_positions',])
-                    """
                 # export transformed dataframe
                 # for reference: physical + pixel coordinates
                 # DF.to_excel(join(SAVE_COORDS_W_PIXELS, FN_COORDS_SAVE), index=True)
@@ -313,7 +281,7 @@ if __name__ == "__main__":
         """
         Verify settings 
         """
-        if VERIFY_SETTINGS:
+        if PLOT_SETTINGS_IMAGE_OVERLAY:
             plotting.plot_surface_profilometry(
                 dict_settings=DICT_SETTINGS,
                 savepath=join(SAVE_SETTINGS, 'surface_profile.png'),

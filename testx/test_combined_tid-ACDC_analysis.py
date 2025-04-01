@@ -181,19 +181,19 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '0112025_W11-B1_C9-0pT'
+    TEST_CONFIG = '01272025_W5-D1_C7-20pT'
 
     # Model params
-    MKEY, MVAL, VMAX = 'pre_stretch', 1.01, 200  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 400  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None  # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -75  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -100  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = True
+    ALL_TRUE = False  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -214,12 +214,12 @@ if __name__ == "__main__":
         make_net_d0zr_per_pid = False
         join_net_d0zr_and_iv_matrix = False
         # plot modifiers
-        plot_all_pids_net_d0zr_per_pid_by_tid = True
-        plot_heatmap_of_all_pids_net_d0zr = True
-        plot_per_pid_net_d0zr_per_pid_by_tid = True
-        plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = True
+        plot_all_pids_net_d0zr_per_pid_by_tid = False
+        plot_heatmap_of_all_pids_net_d0zr = False
+        plot_per_pid_net_d0zr_per_pid_by_tid = False
+        plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
         plot_merged_coords_volt_per_pid_by_all_volt_freq = True
-        plot_merged_coords_volt_heat_maps = True
+        plot_merged_coords_volt_heat_maps = False
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -301,10 +301,9 @@ if __name__ == "__main__":
             DF_MODEL_STRAIN = pd.read_excel(dict_settings['path_model_strain'].strip("'"))
         if DF_MODEL_VDZ is not None:
             model_V, model_dZ = plotting.pre_process_model_dZ_by_V_for_compare(
-                dfm=DF_MODEL_VDZ, mkey=MKEY, mval=MVAL, extend_max_voltage=VMAX)
+                dfm=DF_MODEL_VDZ, mkey=dict_settings['model_mkey'], mval=dict_settings['model_mval'], extend_max_voltage=VMAX)
             ARR_MODEL_VDZ = (model_V, model_dZ)
 
-    # ---
     # ---
 
     # --- plot using net-d0z dataset
@@ -395,6 +394,7 @@ if __name__ == "__main__":
             SAVE_SUB_ANALYSIS = join(SAVE_COMBINED_MCV, 'per_pid_by_all-volt-freq')
             if not os.path.exists(SAVE_SUB_ANALYSIS):
                 os.makedirs(SAVE_SUB_ANALYSIS)
+            # DF_MCVIV = DF_MCVIV[DF_MCVIV['tid'].isin([1, 3])]
             plotting.plot_merged_coords_volt_per_pid_by_volt_freq(
                 df=DF_MCVIV,
                 path_save=SAVE_SUB_ANALYSIS,

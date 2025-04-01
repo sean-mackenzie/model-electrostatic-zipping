@@ -204,7 +204,9 @@ def calculate_apparent_radial_displacement_due_to_rotation(surf_r, surf_z, poly_
 
     # Define a function that gives the apparent radial displacement
     def apparent_radial_displacement(r):
-        rmin, rmax = x.min(), x.max()
+        rmin = x.min()
+        rmax = x.max()
+        if poly_deg == 3: rmax += 5
         # Define a helper function
         def process_element(xn, lower_limit, upper_limit):
             if lower_limit <= xn <= upper_limit:
