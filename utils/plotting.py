@@ -252,6 +252,43 @@ def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=N
     plt.close()
 
 
+def compare_dZmin_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None, dz='d0z'):
+    # -- setup
+    # data
+    dx, dy = 'VOLT', dz
+    df = df[df['STEP'] <= df['STEP'].iloc[df['VOLT'].abs().idxmax()]]
+    # model
+    x, y = pre_process_model_dZ_by_V_for_compare(dfm, mkey, mval, extend_max_voltage=0)
+    # -
+    # plot
+    fig, ax = plt.subplots(figsize=(3.75, 2.5))
+    ax.plot(x, y, 'r-', label='Model')
+    xp, yp = df[dx].abs(), df[dy]
+    ax.plot(xp[0], yp[0], 'ko', ms=1.5, label='Data')
+
+    ii = np.arange(len(xp))
+    yp_min = yp[0]
+    for i, xi, yi in zip(ii, xp[1:], yp[1:]):
+        if yi < yp_min:
+            ax.plot(xi, yi, 'ko', ms=1.5)
+            yp_min = yi
+
+    #ax.plot(xp, yp, 'ko', ms=1.5, label='Data')
+    #ax.plot(df[dx].abs(), df[dy], 'ko', ms=1.5, label='Data')
+    ax.set_xlabel(r'$V_{app} \: (V)$')
+    ax.set_ylabel(r'$z \: (\mu m)$')
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize='small')
+    plt.tight_layout()
+    plt.savefig(
+        join(path_results, f'compare_data_to_model_{save_id}_{dz}-min.png'),
+        dpi=300,
+        facecolor='w',
+        bbox_inches='tight',
+    )
+    plt.close()
+
+
 def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, correction_function, pr, path_results, save_id,
                                                                   dfd_id, poly_deg_id):
     if dfd_id == 'dfd':
@@ -265,7 +302,15 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, corr
 
 
     dfd['dr_corr'] = correction_function(dfd[pr])
+
     dfd['dr_mean_corr'] = dfd['dr_mean'] + dfd['dr_corr']
+
+    # separate particles that
+    # (1) should get corrected b/c on sidewall, and
+    # (2) should not get corrected b/c not on sidewall
+    dfd_outside = dfd[dfd['dr_corr'] == 0]
+    dfd = dfd[dfd['dr_corr'] != 0]
+
     dfd = dfd.drop(columns=['id', 'xg', 'yg', 'rg_mean_f', 'z_mean_f',
                             'r_strain', 'drdz', 'start_frame_i', 'start_frame_f',
                             'end_frame_i', 'end_frame_f', 'average_max_n_positions'])
@@ -273,6 +318,7 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, corr
     # --- 3D DPT data
     pdz, pdr, pdr_corr, dr_corr = 'dz_mean', 'dr_mean', 'dr_mean_corr', 'dr_corr'
     x, y3, y3_corr, dy3_corr = dfd[pdz].abs(), dfd[pdr], dfd[pdr_corr], dfd[dr_corr]
+    xo, y3o, y3o_corr, dy3o_corr = dfd_outside[pdz].abs(), dfd_outside[pdr], dfd_outside[pdr_corr], dfd_outside[dr_corr]
     # --- Model data
     # for radial displacement, we want all data
     mx3 = dfm['dZ'].to_numpy() * 1e6
@@ -288,19 +334,22 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, corr
     fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(5, 6))
 
     ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})')
-    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Data')
+    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Data (on-sidewall)')
+    ax0.plot(xo, dy3o_corr, '^', ms=ms, color='tab:blue', alpha=0.35, label='Data (non-sidewall)')
     ax0.set_ylabel(r'$\Delta_{corr} r \: (\mu m)$')
     ax0.grid(alpha=0.15)
-    ax0.legend(fontsize='xx-small', loc='upper right')
+    ax0.legend(fontsize='xx-small')
 
     ax1.plot(mx3, my3, 'k-', lw=lw, label='Model-Raw')
     ax1.plot(x, y3_corr, 'ro', ms=ms, label='Data-Corrected')
+    ax1.plot(xo, y3o_corr, '^', ms=ms, color='tab:orange', alpha=0.5, label='Data-Raw (non-sidewall)')
     ax1.set_ylabel(ylabel)
     ax1.grid(alpha=0.15)
     ax1.legend(fontsize='xx-small', loc='upper left')
 
     ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected')
     ax2.plot(x, y3, 'ko', ms=ms, label='Data-Raw')
+    ax2.plot(xo, y3o, '^', ms=ms, color='tab:orange', alpha=0.5, label='Data-Raw (non-sidewall)')
     ax2.set_ylabel(ylabel)
     ax2.set_xlabel(xlabel)
     ax2.grid(alpha=0.15)
@@ -567,6 +616,50 @@ def plot_pids_by_synchronous_time_voltage(df, pdzdr, pid, path_results):
     # -
     plt.tight_layout()
     plt.savefig(join(path_results, 'pid{}.png'.format(pid)),
+                dpi=300, facecolor='w')
+    plt.close()
+
+
+def plot_pids_by_synchronous_time_voltage_lock_in(df, pdz, dict_test, pid, path_results):
+
+    # hard-coded
+    pdz_lock_in = pdz + '_lock_in'
+    px1, py2 = 't_sync', 'VOLT'
+    # separate ascending and descending voltages
+    # step_max depends on AC or DC
+    if 'awg_mod_ampl_num_steps' in dict_test.keys():
+        step_max = dict_test['awg_mod_ampl_num_steps'] - 1
+    else:
+        step_max = dict_test['smu_step_max']
+    # pre-processing
+    dfpid_ascending = df[df['STEP'] <= step_max]
+    dfpid_descending = df[df['STEP'] > step_max]
+
+    # plot
+    fig, (ax1, ax2) = plt.subplots(figsize=(7, 6), nrows=2, sharex=False,
+                                   gridspec_kw={'height_ratios': [1.85, 1]})
+    # plot z/dz by time
+    ax1.plot(df[px1], df[pdz], '-o', ms=0.75, lw=0.5, color='tab:blue', label=pdz)
+    ax1.plot(df[px1], df[pdz_lock_in], 'o', ms=1.5, color='tab:orange', label=pdz_lock_in)
+    ax1.set_ylabel(r'$\Delta z_{lock-in} \: (\mu m)$', fontsize='small')
+    ax1.set_xlabel(r'$t \: (s)$', fontsize='small')
+    ax1.legend(title=r'$p_{ID}=$' + str(pid), fontsize='x-small')
+    ax1.grid(alpha=0.1)
+    # plot V(t)
+    ax1r = ax1.twinx()
+    ax1r.plot(df[px1], df[py2], '-', color='gray', lw=0.75, alpha=0.5)
+    ax1r.set_ylabel(r'$V_{app} \: (V)$', color='gray', alpha=0.5, fontsize='small')
+    # ---
+    # plot dz_lock_in by voltage
+    ax2.plot(dfpid_ascending[py2], dfpid_ascending[pdz_lock_in], 'o', ms=2.5, lw=0.75, color='tab:orange', label='ascending')
+    ax2.plot(dfpid_descending[py2], dfpid_descending[pdz_lock_in], 'o', ms=1.5, lw=0.75, color='gray', label='descending')
+    ax2.set_xlabel(r'$V_{app} \: (V)$', fontsize='small')
+    ax2.set_ylabel(r'$\Delta z_{lock-in} \: (\mu m)$', fontsize='small')
+    ax2.grid(alpha=0.1)
+    ax2.legend(fontsize='x-small')
+    # -
+    plt.tight_layout()
+    plt.savefig(join(path_results, 'pid{}_{}.png'.format(pid, pdz_lock_in)),
                 dpi=300, facecolor='w')
     plt.close()
 
@@ -1353,7 +1446,7 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
             ax.set_title('PID: {}'.format(pid))
         else:
             ax.set_title(set_title + ': PID: {}'.format(pid))
-            ax.legend(title='TID', fontsize='small')
+            ax.legend(title='TID', fontsize='xx-small')
         ax.set_xlabel(r'$V \: (V)$')
         ax.set_ylabel(r'$z \: (\mu m)$')
         ax.grid(alpha=0.25)

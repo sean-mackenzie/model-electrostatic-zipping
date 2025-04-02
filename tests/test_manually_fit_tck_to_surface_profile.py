@@ -70,8 +70,8 @@ def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3,
     dfp = df[(df['r'] > 0)]
     dfn = df[(df['r'] < 0)]
     dfn.loc[:, 'r'] = dfn['r'] * -1  # dfn.loc[dfn['column'] == value, 'another_column'] = new_value
-    ax1.plot(dfp.r, dfp.z, '-', label='right_half: r>0')
-    ax1.plot(dfn.r, dfn.z, '-', label='left_half: r<0')
+    ax1.plot(dfp.r, dfp.z, '-', label='right_half: r>0; zmin={}'.format(np.round(dfp.z.min(), 1)))
+    ax1.plot(dfn.r, dfn.z, '-', label='left_half: r<0; zmin={}'.format(np.round(dfn.z.min(), 1)))
     ax1.axvline(radius, color='k', ls='--', lw=0.5)
     ax1.grid(alpha=0.25)
     ax1.legend(title='subset', loc='upper left')
@@ -92,7 +92,7 @@ def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3,
     rx = df.r.to_numpy()
     ry = df.z.to_numpy()
     px1, py1, tck = smooth_array(rx, ry, smoothing, num_points, degree=degree, return_tck=True)
-    ax3.plot(rx, ry, 'k-o', ms=2, lw=2, label='raw')
+    ax3.plot(rx, ry, 'k-o', ms=2, lw=2, label='raw: zmax - zmin = {}'.format(np.round(ry.max() - ry.min(), 1)))
     ax3.plot(px1, py1, 'r-o', ms=1, label='smooth')
     ax3.grid(alpha=0.125)
     ax3.legend(title='subset: {}'.format(subset), loc='upper left')

@@ -181,10 +181,10 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01272025_W5-D1_C7-20pT'
+    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
 
     # Model params
-    VMAX = 400  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 250  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = False  # True False
+    ALL_TRUE = True  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True

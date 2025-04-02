@@ -19,8 +19,8 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01272025_W5-D1_C7-20pT'
-    TIDS = [4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '01262025_W10-A1_C7-20pT'
+    TIDS = [7]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     IV_ACDC = 'DC'  # 'AC' or 'DC'
     ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     # -
@@ -29,14 +29,14 @@ if __name__ == "__main__":
     PLOT_SETTINGS_IMAGE_OVERLAY = False  # only need to run once per test configuration
     # -
     # PRE-PROCESSING (True False)
-    PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
-    PRE_PROCESS_IV = True  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
-    MERGE_COORDS_AND_VOLTAGE = True
+    PRE_PROCESS_COORDS = False  # If you change andor_keithley_delay time, you must pre-process coords.
+    PRE_PROCESS_IV = False  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
+    MERGE_COORDS_AND_VOLTAGE = False
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
-    SECOND_PASS = False  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = True, 2  # True: export dfd0 to special directory
+    SECOND_PASS = True  # True False
+    EXPORT_NET_D0ZR, AVG_MAX_N = False, 20  # True: export dfd0 to special directory
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (0, 6), (25, 30)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (0, 40), (142, 147)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------

@@ -86,8 +86,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             plot_depth_dependent_in_plane_stretch = True
             plot_pids_dr_by_dz = True
             plot_pids_dz_by_voltage_hysteresis = True
-            plot_normalized_membrane_profile, frois_norm_profile = False, [25, 31, 63]
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [25, 31, 63]
+            plot_normalized_membrane_profile, frois_norm_profile = False, [5, 51, 62, 75]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [5, 51, 62, 75]
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
@@ -126,18 +126,19 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 5
+    average_max_n_positions = 4
     # -
-    plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
+    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
-    plot_single_pids_by_frame = True  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_by_synchronous_time_voltage = True
-    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
+    plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
+    plot_pids_by_synchronous_time_voltage = False
+    plot_pids_by_synchronous_time_voltage_dz_lock_in = False
+    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
-    plot_quiver_xy_by_frame = True
-    plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    plot_quiver_xy_by_frame = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = False
     show_zipping_interface = True
     dr_ampl = 10
     fit_spline_to_memb = False
@@ -217,6 +218,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     path_results_pids_by_frame = join(path_results_per_pid, 'pids_by_frame')
     path_results_pids_dr_by_dz = join(path_results_per_pid, 'pids_dr_by_dz')
     path_results_pids_by_synchronous_time_voltage = join(path_results_per_pid, 'pids_by_sync-time-volts')
+    path_results_pids_by_synchronous_time_voltage_dz_lock_in = join(path_results_per_pid, 'pids_by_sync-time-volts_dz-lock-in')
     path_results_pids_by_synchronous_time_voltage_monitor = join(path_results_per_pid, 'pids_by_sync-time-volts-monitor')
     path_results_pids_dz_by_voltage_hysteresis = join(path_results_per_pid, 'pids_dz_by_voltage_hysteresis')
     path_results_pids_dzdr_by_voltage_hysteresis = join(path_results_per_pid, 'pids_dzdr_by_voltage_hysteresis')
@@ -239,7 +241,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             path_results_compare_dZ_by_V, path_results_depth_dependent_in_plane_stretch,
             path_results_depth_dependent_in_plane_stretch_w_rotation_correction, path_results_pids_by_X,
             path_results_pids_by_frame, path_results_pids_dr_by_dz,
-            path_results_pids_by_synchronous_time_voltage, path_results_pids_by_synchronous_time_voltage_monitor,
+            path_results_pids_by_synchronous_time_voltage, path_results_pids_by_synchronous_time_voltage_dz_lock_in, path_results_pids_by_synchronous_time_voltage_monitor,
             path_results_pids_dz_by_voltage_hysteresis, path_results_pids_dzdr_by_voltage_hysteresis,
             path_results_scatter_xy_by_frame, path_results_quiver_xy_by_frame,
             path_results_1D_z_by_r_by_frame, path_results_1D_dz_by_r_by_frame,
@@ -250,7 +252,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             compare_pull_in_voltage_with_model, plot_depth_dependent_in_plane_stretch,
             plot_depth_dependent_in_plane_stretch_w_rotation_correction, plot_all_pids_by_X,
             plot_single_pids_by_frame, plot_pids_dr_by_dz,
-            plot_pids_by_synchronous_time_voltage, plot_pids_by_synchronous_time_voltage_monitor,
+            plot_pids_by_synchronous_time_voltage, plot_pids_by_synchronous_time_voltage_dz_lock_in, plot_pids_by_synchronous_time_voltage_monitor,
             plot_pids_dz_by_voltage_hysteresis, plot_pids_dz_by_voltage_hysteresis,
             plot_scatter_xy_by_frame, plot_quiver_xy_by_frame,
             plot_1D_z_by_r_by_frame, plot_1D_dz_by_r_by_frame,
@@ -293,8 +295,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # removes "bad" particles from visualizations, or
     # includes only "good" particles
     if only_pids:
+        print("Keeping only pids: {}".format(only_pids))
         df = df[df['id'].isin(only_pids)]
     elif not_pids:
+        print("Removing pids: {}".format(not_pids))
         df = df[~df['id'].isin(not_pids)]
     only_pids = df['id'].unique()
     dfd = dfd[dfd['id'].isin(only_pids)]
@@ -307,9 +311,19 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # --- SLICE
     if (compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
         if compare_pull_in_voltage_with_model:
-            for pid in dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.15)]['id'].unique():
+            pids_to_compare_with_model = dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.25)]['id'].unique()
+            for pid in pids_to_compare_with_model:
                 df_pid = df[df['id'] == pid].reset_index(drop=True)
                 plotting.compare_dZ_by_V_with_model(
+                    df=df_pid,
+                    dfm=df_model_VdZ,
+                    path_results=path_results_compare_dZ_by_V,
+                    save_id=f'pid{int(pid)}',
+                    mkey=model_mkey,  # column name
+                    mval=model_mval,  # column value
+                    dz=pd0z,
+                )
+                plotting.compare_dZmin_by_V_with_model(
                     df=df_pid,
                     dfm=df_model_VdZ,
                     path_results=path_results_compare_dZ_by_V,
@@ -507,6 +521,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             plot_single_pids_by_frame or
             plot_pids_dr_by_dz or
             plot_pids_by_synchronous_time_voltage or
+            plot_pids_by_synchronous_time_voltage_dz_lock_in or
             plot_pids_by_synchronous_time_voltage_monitor or
             plot_pids_dz_by_voltage_hysteresis
     ):
@@ -539,6 +554,22 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     pdzdr=(pdz, pdr),
                     pid=pid,
                     path_results=path_results_pids_by_synchronous_time_voltage,
+                )
+
+            if plot_pids_by_synchronous_time_voltage_dz_lock_in:
+                plotting.plot_pids_by_synchronous_time_voltage_lock_in(
+                    df=dfpid,
+                    pdz='d0z',
+                    dict_test=dict_test,
+                    pid=pid,
+                    path_results=path_results_pids_by_synchronous_time_voltage_dz_lock_in,
+                )
+                plotting.plot_pids_by_synchronous_time_voltage_lock_in(
+                    df=dfpid,
+                    pdz='dz',
+                    dict_test=dict_test,
+                    pid=pid,
+                    path_results=path_results_pids_by_synchronous_time_voltage_dz_lock_in,
                 )
 
             if plot_pids_by_synchronous_time_voltage_monitor:
@@ -579,78 +610,76 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # --- --- ONE PLOT PER FRAME
 
 
-        # --- plot 2D heat maps
-        plot_2d_heatmaps_per_frame = False
-        if plot_2d_heatmaps_per_frame:
-            if plot_1D_z_by_r_by_frame or plot_1D_dz_by_r_by_frame or plot_2D_z_by_frame or plot_2D_dz_by_frame or plot_2D_dr_by_frame:
-                rmin, rmax = 0, df[pr].max()
-                zmin, zmax = df[pz].min(), df[pz].max()
-                dzmin, dzmax = df[pdz].min(), df[pdz].max()
-                drmin, drmax = df[pdr].min(), df[pdr].max()
-                # ---
-                for frame in np.arange(dict_test['dpt_start_frame'][1], dict_test['dpt_end_frames'][0] + 1):
-                    df_frame = df[df['frame'] == frame]
-                    # -
-                    if plot_1D_z_by_r_by_frame:
-                        fig, ax = plt.subplots(figsize=(5, 2.75))
-                        ax.plot(df_frame[pr], df_frame[pz], 'o', ms=1.5)
-                        ax.set_xlabel(r'$r \: (\mu m)$')
-                        ax.set_xlim(rmin, rmax + 5)
-                        ax.set_ylabel(r'$z \: (\mu m)$')
-                        ax.set_ylim(zmin - 2.5, zmax + 2.5)
-                        ax.grid(alpha=0.25)
-                        ax.set_title('frame: {:03d}'.format(frame))
-                        plt.tight_layout()
-                        plt.savefig(join(path_results_1D_z_by_r_by_frame, 'z-r_by_fr{:03d}.png'.format(frame)),
-                                    dpi=300, facecolor='w')
-                        plt.close()
-                    # ---
-                    if plot_1D_dz_by_r_by_frame:
-                        fig, ax = plt.subplots(figsize=(5, 2.75))
-                        ax.plot(df_frame[pr], df_frame[pdz], 'o', ms=1.5)
-                        ax.set_xlabel(r'$r \: (\mu m)$')
-                        ax.set_xlim(rmin, rmax + 5)
-                        ax.set_ylabel(r'$\Delta z \: (\mu m)$')
-                        ax.set_ylim(dzmin - 2.5, dzmax + 2.5)
-                        ax.grid(alpha=0.25)
-                        ax.set_title('frame: {:03d}'.format(frame))
-                        plt.tight_layout()
-                        plt.savefig(join(path_results_1D_dz_by_r_by_frame, 'dz-r_by_fr{:03d}.png'.format(frame)),
-                                    dpi=300, facecolor='w')
-                        plt.close()
-                    # ---
-                    if plot_2D_z_by_frame:
-                        plotting.plot_2D_heatmap(df=df_frame,
-                                                 pxyz=(px, py, pz),
-                                                 savepath=join(path_results_2D_z_by_frame, 'xy-z_fr{:03d}.png'.format(frame)),
-                                                 field=(0, dict_settings['field_of_view']),
-                                                 interpolate='linear',
-                                                 levels=np.round(np.linspace(zmin, zmax, levels_z)),
-                                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$z \: (\mu m)$'),
-                                                 title='frame: {:03d}'.format(frame),
-                                                 )
-                    # ---
-                    if plot_2D_dz_by_frame:
-                        plotting.plot_2D_heatmap(df=df_frame,
-                                                 pxyz=(px, py, pdz),
-                                                 savepath=join(path_results_2D_dz_by_frame, 'xy-dz_fr{:03d}.png'.format(frame)),
-                                                 field=(0, dict_settings['field_of_view']),
-                                                 interpolate='linear',
-                                                 levels=np.round(np.linspace(dzmin, dzmax, levels_z)),
-                                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$'),
-                                                 title='frame: {:03d}'.format(frame),
-                                                 )
-                    # ---
-                    if plot_2D_dr_by_frame:
-                        plotting.plot_2D_heatmap(df=df_frame,
-                                                 pxyz=(px, py, pdr),
-                                                 savepath=join(path_results_2D_dr_by_frame, 'xy-dr_fr{:03d}.png'.format(frame)),
-                                                 field=(0, dict_settings['field_of_view']),
-                                                 interpolate='linear',
-                                                 levels=np.round(np.linspace(drmin, drmax, levels_r), 1),
-                                                 units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r \: (\mu m)$'),
-                                                 title='frame: {:03d}'.format(frame),
-                                                 )
+    # --- plot 2D heat maps
+    if plot_1D_z_by_r_by_frame or plot_1D_dz_by_r_by_frame or plot_2D_z_by_frame or plot_2D_dz_by_frame or plot_2D_dr_by_frame:
+        rmin, rmax = 0, df[pr].max()
+        zmin, zmax = df[pz].min(), df[pz].max()
+        dzmin, dzmax = df[pdz].min(), df[pdz].max()
+        drmin, drmax = df[pdr].min(), df[pdr].max()
+        # ---
+        for frame in animate_frames:
+            df_frame = df[df['frame'] == frame]
+            # -
+            if plot_1D_z_by_r_by_frame:
+                fig, ax = plt.subplots(figsize=(5, 2.75))
+                ax.plot(df_frame[pr], df_frame[pz], 'o', ms=1.5)
+                ax.set_xlabel(r'$r \: (\mu m)$')
+                ax.set_xlim(rmin, rmax + 5)
+                ax.set_ylabel(r'$z \: (\mu m)$')
+                ax.set_ylim(zmin - 2.5, zmax + 2.5)
+                ax.grid(alpha=0.25)
+                ax.set_title('frame: {:03d}'.format(frame))
+                plt.tight_layout()
+                plt.savefig(join(path_results_1D_z_by_r_by_frame, 'z-r_by_fr{:03d}.png'.format(frame)),
+                            dpi=300, facecolor='w')
+                plt.close()
+            # ---
+            if plot_1D_dz_by_r_by_frame:
+                fig, ax = plt.subplots(figsize=(5, 2.75))
+                ax.plot(df_frame[pr], df_frame[pdz], 'o', ms=1.5)
+                ax.set_xlabel(r'$r \: (\mu m)$')
+                ax.set_xlim(rmin, rmax + 5)
+                ax.set_ylabel(r'$\Delta z \: (\mu m)$')
+                ax.set_ylim(dzmin - 2.5, dzmax + 2.5)
+                ax.grid(alpha=0.25)
+                ax.set_title('frame: {:03d}'.format(frame))
+                plt.tight_layout()
+                plt.savefig(join(path_results_1D_dz_by_r_by_frame, 'dz-r_by_fr{:03d}.png'.format(frame)),
+                            dpi=300, facecolor='w')
+                plt.close()
+            # ---
+            if plot_2D_z_by_frame:
+                plotting.plot_2D_heatmap(df=df_frame,
+                                         pxyz=(px, py, pz),
+                                         savepath=join(path_results_2D_z_by_frame, 'xy-z_fr{:03d}.png'.format(frame)),
+                                         field=(0, dict_settings['field_of_view']),
+                                         interpolate='linear',
+                                         levels=np.round(np.linspace(zmin, zmax, levels_z)),
+                                         units=(r'$(\mu m)$', r'$(\mu m)$', r'$z \: (\mu m)$'),
+                                         title='frame: {:03d}'.format(frame),
+                                         )
+            # ---
+            if plot_2D_dz_by_frame:
+                plotting.plot_2D_heatmap(df=df_frame,
+                                         pxyz=(px, py, pdz),
+                                         savepath=join(path_results_2D_dz_by_frame, 'xy-dz_fr{:03d}.png'.format(frame)),
+                                         field=(0, dict_settings['field_of_view']),
+                                         interpolate='linear',
+                                         levels=np.round(np.linspace(dzmin, dzmax, levels_z)),
+                                         units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta z \: (\mu m)$'),
+                                         title='frame: {:03d}'.format(frame),
+                                         )
+            # ---
+            if plot_2D_dr_by_frame:
+                plotting.plot_2D_heatmap(df=df_frame,
+                                         pxyz=(px, py, pdr),
+                                         savepath=join(path_results_2D_dr_by_frame, 'xy-dr_fr{:03d}.png'.format(frame)),
+                                         field=(0, dict_settings['field_of_view']),
+                                         interpolate='linear',
+                                         levels=np.round(np.linspace(drmin, drmax, levels_r), 1),
+                                         units=(r'$(\mu m)$', r'$(\mu m)$', r'$\Delta r \: (\mu m)$'),
+                                         title='frame: {:03d}'.format(frame),
+                                         )
 
     # ---
 

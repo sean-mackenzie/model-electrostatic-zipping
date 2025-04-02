@@ -120,6 +120,8 @@ def calculate_lock_in_rolling_min(df, pcols, settings, test_settings, min_period
             time_per_stimulus = 1 / (2 * test_settings['awg_freq'])
         elif 'source_delay_time' in test_settings.keys():
             time_per_stimulus = test_settings['source_delay_time']
+        elif 'smu_source_delay_time' in test_settings.keys():
+            time_per_stimulus = test_settings['smu_source_delay_time']
         else:
             raise ValueError('No source delay time or AWG frequency found in test settings.')
         samples_per_stimulus = np.max([int(np.round(time_per_stimulus / time_per_sample)), 1])

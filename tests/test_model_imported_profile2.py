@@ -85,20 +85,20 @@ if __name__ == '__main__':
     """
     # ---
     """ NOTE: these values are computed via Bulge Test and/or calculate_pre_stretch_from_residual_stress.py."""
-    MEMB_ID = 'C15-15pT-25nmAu'
-    MEMB_YOUNGS_MODULUS_BULGE_TEST = 75e6  # Pa
-    MEMB_RESIDUAL_STRESS_BULGE_TEST = 220e3  # Pa
-    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.15
-    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.146
-    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 245e3  # Pa
-    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.129
+    MEMB_ID = 'C9-0pT-20nmAu'
+    MEMB_YOUNGS_MODULUS_BULGE_TEST = 2.5e6  # Pa
+    MEMB_RESIDUAL_STRESS_BULGE_TEST = 30e3  # Pa
+    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.0
+    EXPERIMENTAL_PRE_STRETCH_MEASURED = 'did not measure'
+    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 0  # Pa
+    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.021
     GENT_MODEL_J_MEMB = 54  # Elastosil 200 um thick: 54 or 16; Maffli et al. NuSil: 80.4
 
     # ---
 
     # general inputs
-    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
-    WID = 13
+    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
+    WID = 10
     TID = 1
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
     BASE_DIR = join(ROOT_DIR, TEST_CONFIG)
@@ -113,17 +113,17 @@ if __name__ == '__main__':
 
 
     """ NOTE: The model actually uses these values here. You can play with these values. """
-    MODEL_USE_PRE_STRETCH = 1.146  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
-    MODEL_USE_YOUNGS_MODULUS = 1.0e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
-    MODEL_USE_THICKNESS_DIELECTRIC = 2.1e-6
+    MODEL_USE_PRE_STRETCH = 1.01  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
+    MODEL_USE_YOUNGS_MODULUS = 2.5e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
+    MODEL_USE_THICKNESS_DIELECTRIC = 2.0e-6
     MODEL_USE_SURFACE_ROUGHNESS = 1e-9
 
     FID_OVERRIDE = None  # None
-    SURFACE_PROFILE_SUBSET = 'left_half'  # 'left_half', 'right_half', 'full'
-    TCK_SMOOTHING = 1.0
+    SURFACE_PROFILE_SUBSET = 'right_half'  # 'left_half', 'right_half', 'full'
+    TCK_SMOOTHING = 0.01
     SWEEP_PARAM = 'pre_stretch'  # 'E', 'pre_stretch', 'Jm'
     DICT_SETTINGS_RADIUS = DICT_SETTINGS['radius_microns']
-    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 25
+    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 20
 
     NUM_SEGMENTS = 1000  # NOTE: this isn't necessarily the final number of solver segments
     COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
@@ -138,18 +138,18 @@ if __name__ == '__main__':
                                                                        np.round(MODEL_USE_YOUNGS_MODULUS *1e-6, 1), MODEL_USE_PRE_STRETCH,
                                                                        SURFACE_PROFILE_SUBSET, TCK_SMOOTHING, SWEEP_PARAM))
 
-    SWEEP_VOLTAGES = np.arange(65, 250, 1)
+    SWEEP_VOLTAGES = np.arange(35, 250, 1)
 
     if SWEEP_PARAM == 'E':
         SWEEP_K = 'E'
-        SWEEP_VS = np.array([1, 1.1, 1.2]) * 1e6
+        SWEEP_VS = np.array([2.0, 2.25, 2.5]) * 1e6
         SWEEP_K_FIG = "E (MPa)"
         SWEEP_VS_FIGS = np.round(SWEEP_VS * 1e-6, 1)
         SWEEP_K_XLSX = 'E'
         SWEEP_VS_XLSX = [f'{x}MPa' for x in SWEEP_VS_FIGS]
     elif SWEEP_PARAM == 'pre_stretch':
         SWEEP_K = 'pre_stretch'
-        SWEEP_VS = [1.1, 1.129, 1.146]
+        SWEEP_VS = [1.006, 1.01, 1.015, 1.02]
         SWEEP_K_FIG = "Pre-stretch"
         SWEEP_VS_FIGS = SWEEP_VS
         SWEEP_K_XLSX = 'pre_stretch'
@@ -302,10 +302,11 @@ if __name__ == '__main__':
     #py = np.linspace(py.max(), py.min(), 3000)
     if not os.path.exists(join(SAVE_DIR, SAVE_ID + '_profile.png')):
         fig, ax = plt.subplots(figsize=(5, 3))
-        ax.plot(px * 1e3, py * 1e6)
+        ax.plot(px * 1e3, py * 1e6, label=np.round(np.min(py * 1e6), 1))
         ax.set_xlabel('mm')
         ax.set_ylabel('um')
         ax.grid(alpha=0.25)
+        ax.legend(title='Depth (um)')
         ax.set_title('dz/segment = {} um ({} segs)'.format(np.round(np.min(py * 1e6) / len(px), 2), len(px)))
         plt.suptitle(SAVE_ID)
         plt.tight_layout()
