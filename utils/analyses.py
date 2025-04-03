@@ -126,10 +126,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 4
+    average_max_n_positions = 3
     # -
     plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
     plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
     plot_pids_by_synchronous_time_voltage = False

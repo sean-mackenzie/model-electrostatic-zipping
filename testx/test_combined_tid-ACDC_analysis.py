@@ -181,19 +181,19 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
+    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
 
     # Model params
-    VMAX = 250  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 350  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None  # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -100  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -80  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = True  # True False
+    ALL_TRUE = False  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     READ_SETTINGS = join(SAVE_DIR, 'settings')
     READ_NET_D0ZR = join(SAVE_DIR, 'net-d0zr_per_pid')
     SAVE_COMBINED = join(SAVE_DIR, 'combined')
-    SAVE_COMBINED_MCV = join(SAVE_COMBINED, 'merged-coords-volt_per_tid')
+    SAVE_COMBINED_MCV = join(SAVE_COMBINED, 'merged-coords-volt_per_tid', 'AC-only')
     SAVE_COMBINED_NET_D0ZR = join(SAVE_COMBINED, 'net-d0zr_per_pid_per_tid')
     XYM = 'g'  # 'g' or 'm': use sub-pixel or discrete in-plane localization method
     # filenames
@@ -368,6 +368,7 @@ if __name__ == "__main__":
             base_dir=BASE_DIR,
             save_dir=SAVE_COMBINED,
         )
+        # DF_MCVIV = DF_MCVIV[DF_MCVIV['acdc'] == 'AC']
 
         if plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid:
             SAVE_SUB_ANALYSIS = join(SAVE_COMBINED_MCV, 'parametric_sweeps')
