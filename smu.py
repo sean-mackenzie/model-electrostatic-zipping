@@ -91,6 +91,8 @@ def read_settings_to_dict(filepath):
             else:
                 dict_settings.update({k: eval(v)})
         else:
+            print(k)
+            a = 1
             dict_settings.update({k: float(v)})
     return dict_settings
 

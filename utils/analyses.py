@@ -58,14 +58,31 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
     pz, pdz, pd0z = 'z', 'dz', 'd0z'
     pdz_lock_in, pd0z_lock_in = 'dz_lock_in', 'd0z_lock_in'
-    przdr = (pr, pd0z, pdr)  # for plotting 3D DPT coords overlay surface profile
+    # -
+    # compare with model
+    dz_compare_with_model = pd0z  # pd0z or pdz
+    dz_lock_in_compare_with_model = dz_compare_with_model + '_lock_in'
+    # for plotting 3D DPT coords overlay surface profile
+    przdr = (pr, pd0z, pdr)
+    # -
     # -
     # initialize
+    plot_scatter_xy_by_frame = False
+    plot_depth_dependent_in_plane_stretch_w_rotation_correction = False
+    rotation_correction_poly_deg = [7, 9]  # [3, 5]
     df_model_VdZ = None
     df_model_strain = None
-    model_mkey, model_mval = dict_settings['model_mkey'], dict_settings['model_mval']
-    plot_scatter_xy_by_frame = False
-    plot_depth_dependent_in_plane_stretch_w_rotation_correction = True  # This can always be true
+    if 'model_mkey' in dict_settings.keys():
+        model_mkey, model_mval = dict_settings['model_mkey'], dict_settings['model_mval']
+    else:
+        model_mkey, model_mval = None, None
+    # -
+    if dict_test['samples_per_voltage_level'] > 1.5 and pd0z_lock_in in df.columns:
+        plot_all_dz_lock_ins = True
+        plot_pids_by_synchronous_time_voltage_dz_lock_in = plot_all_dz_lock_ins
+    else:
+        plot_all_dz_lock_ins = False
+        plot_pids_by_synchronous_time_voltage_dz_lock_in = plot_all_dz_lock_ins
     # -
     if animate_frames is not None:
         pass
@@ -84,10 +101,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         if dict_test['smu_test_type'] in [1, 2, '1', '2']:
             compare_pull_in_voltage_with_model = True
             plot_depth_dependent_in_plane_stretch = True
-            plot_pids_dr_by_dz = True
-            plot_pids_dz_by_voltage_hysteresis = True
-            plot_normalized_membrane_profile, frois_norm_profile = False, [5, 51, 62, 75]
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [5, 51, 62, 75]
+            plot_pids_dr_by_dz = False
+            plot_pids_dz_by_voltage_hysteresis = False
+            plot_normalized_membrane_profile, frois_norm_profile = True, [10, 70, 90, 105]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [10, 70, 90, 105]
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
@@ -99,10 +116,10 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         if dict_test['test_type'] in ['STD1', 'STD2']:
             compare_pull_in_voltage_with_model = True
             plot_depth_dependent_in_plane_stretch = True
-            plot_pids_dr_by_dz = True
-            plot_pids_dz_by_voltage_hysteresis = True
-            plot_normalized_membrane_profile, frois_norm_profile = True, [40, 50, 70, 101]
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [40, 50, 75, 101]
+            plot_pids_dr_by_dz = False
+            plot_pids_dz_by_voltage_hysteresis = False
+            plot_normalized_membrane_profile, frois_norm_profile = False, [40, 50, 70, 101]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [40, 50, 75, 101]
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
@@ -126,19 +143,18 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 3
+    average_max_n_positions = 70
     # -
     plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
     plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
     plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
     plot_pids_by_synchronous_time_voltage = False
-    plot_pids_by_synchronous_time_voltage_dz_lock_in = False
     plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
-    plot_quiver_xy_by_frame = False
-    plot_1D_dz_by_r_by_frame_with_surface_profile = False
+    plot_quiver_xy_by_frame = True
+    plot_1D_dz_by_r_by_frame_with_surface_profile = True
     show_zipping_interface = True
     dr_ampl = 10
     fit_spline_to_memb = False
@@ -163,7 +179,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     plot_1D_z_by_r_by_frame = False
     plot_1D_dz_by_r_by_frame = False
     plot_2D_z_by_frame = False
-    plot_2D_dz_by_frame = False
+    plot_2D_dz_by_frame = True
     plot_2D_dr_by_frame = False
     # -
     # for contourf plots
@@ -189,19 +205,24 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
         #    raise ValueError("This is a special case. Need to double-check this instance.")
         #    df_model_VdZ = pd.read_excel(dict_test['path_model_dZ_by_V'])
         if 'path_model' in dict_settings.keys():
-            mfiles = [x for x in os.listdir(dict_settings['path_model'].strip("'")) if x.endswith('.xlsx')]
-            mfile_z_by_v = [x for x in mfiles if x.endswith('z-by-v.xlsx')][0]
-            mfile_strain_by_z = [x for x in mfiles if x.endswith('strain-by-z.xlsx')][0]
+            if dict_settings['path_model'] == 'nan':
+                compare_pull_in_voltage_with_model = False
+                plot_depth_dependent_in_plane_stretch = False
+            else:
+                mfiles = [x for x in os.listdir(dict_settings['path_model'].strip("'")) if x.endswith('.xlsx')]
+                mfile_z_by_v = [x for x in mfiles if x.endswith('z-by-v.xlsx')][0]
+                mfile_strain_by_z = [x for x in mfiles if x.endswith('strain-by-z.xlsx')][0]
 
-            df_model_VdZ = pd.read_excel(join(dict_settings['path_model'], mfile_z_by_v))
-            df_model_strain = pd.read_excel(join(dict_settings['path_model'], mfile_strain_by_z))
+                df_model_VdZ = pd.read_excel(join(dict_settings['path_model'], mfile_z_by_v))
+                df_model_strain = pd.read_excel(join(dict_settings['path_model'], mfile_strain_by_z))
         elif 'path_model_dZ_by_V' or 'path_model_strain' in dict_settings.keys():
             df_model_VdZ = pd.read_excel(dict_settings['path_model_dZ_by_V'].strip("'"))
             df_model_strain = pd.read_excel(dict_settings['path_model_strain'].strip("'"))
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
-            plot_depth_dependent_in_plane_stretch_w_rotation_correction = False
+        if plot_depth_dependent_in_plane_stretch:
+            plot_depth_dependent_in_plane_stretch_w_rotation_correction = True
 
     # -
     path_results_rep = join(path_results.format(tid), 'xy' + xym)
@@ -311,7 +332,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # --- SLICE
     if (compare_pull_in_voltage_with_model or plot_depth_dependent_in_plane_stretch or plot_all_pids_by_X):
         if compare_pull_in_voltage_with_model:
-            pids_to_compare_with_model = dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.25)]['id'].unique()
+            pids_to_compare_with_model = dfd0[dfd0['dz_mean'] < dfd0['dz_mean'].quantile(0.1)]['id'].unique()
             for pid in pids_to_compare_with_model:
                 df_pid = df[df['id'] == pid].reset_index(drop=True)
                 plotting.compare_dZ_by_V_with_model(
@@ -321,7 +342,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     save_id=f'pid{int(pid)}',
                     mkey=model_mkey,  # column name
                     mval=model_mval,  # column value
-                    dz=pd0z,
+                    dz=dz_compare_with_model,
                 )
                 plotting.compare_dZmin_by_V_with_model(
                     df=df_pid,
@@ -330,9 +351,9 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     save_id=f'pid{int(pid)}',
                     mkey=model_mkey,  # column name
                     mval=model_mval,  # column value
-                    dz=pd0z,
+                    dz=dz_compare_with_model,
                 )
-                if dict_test['samples_per_voltage_level'] > 1.5 and pd0z_lock_in in df_pid.columns:
+                if plot_all_dz_lock_ins and dz_lock_in_compare_with_model in df_pid.columns:
                     plotting.compare_dZ_by_V_with_model(
                         df=df_pid,
                         dfm=df_model_VdZ,
@@ -340,7 +361,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                         save_id=f'pid{int(pid)}',
                         mkey=model_mkey,  # column name
                         mval=model_mval,  # column value
-                        dz=pd0z_lock_in,
+                        dz=dz_lock_in_compare_with_model,
                     )
 
         if plot_depth_dependent_in_plane_stretch:
@@ -372,13 +393,13 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                 if plot_depth_dependent_in_plane_stretch_w_rotation_correction:
                     dict_surface_profilometry = get_surface_profile_dict(dict_settings)
                     surf_r, surf_z = dict_surface_profilometry['r'], dict_surface_profilometry['z']
-                    for poly_deg in [3, 5]:
+                    for poly_deg in rotation_correction_poly_deg:
                         func_apparent_r_displacement = empirical.calculate_apparent_radial_displacement_due_to_rotation(
                             surf_r=surf_r,
                             surf_z=surf_z,
                             poly_deg=poly_deg,
                             membrane_thickness=dict_settings['membrane_thickness'],
-                            z_clip=-0.125,
+                            z_clip=-0.125,  # -0.125 (for W11: -0.8)
                             path_save=path_results_depth_dependent_in_plane_stretch_w_rotation_correction,
                         )
 
@@ -595,7 +616,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
                     pid=pid,
                     path_results=path_results_pids_dzdr_by_voltage_hysteresis)
 
-                if pd0z_lock_in in dfpid.columns:
+                if plot_all_dz_lock_ins:
                     plotting.plot_pids_dz_by_voltage_hysteresis(
                         df=dfpid,
                         pdz=pd0z_lock_in,

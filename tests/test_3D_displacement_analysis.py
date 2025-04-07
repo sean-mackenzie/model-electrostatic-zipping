@@ -19,32 +19,31 @@ if __name__ == "__main__":
     """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
-    TIDS = [21, 22, 23]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
-    IV_ACDC = 'AC'  # 'AC' or 'DC'
-    ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    TEST_CONFIG = '01272025_W14-F1_C7-20pT'
+    TIDS = [8]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    IV_ACDC = 'DC'  # 'AC' or 'DC'
+    ANIMATE_FRAMES = np.arange(30, 155)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
     # -
     # SETTINGS (True False)
     UPDATE_DEPENDENT = False  # True: update all dependent settings in dict_settings.xlsx
     PLOT_SETTINGS_IMAGE_OVERLAY = False  # only need to run once per test configuration
     # -
     # PRE-PROCESSING (True False)
-    PRE_PROCESS_COORDS = True  # If you change andor_keithley_delay time, you must pre-process coords.
-    PRE_PROCESS_IV = True  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
-    MERGE_COORDS_AND_VOLTAGE = True
+    PRE_PROCESS = True
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = True  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = False, 3  # True: export dfd0 to special directory
+    EXPORT_NET_D0ZR, AVG_MAX_N = True, 70  # True: export dfd0 to special directory
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 7  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
-    DROP_PIDS = []  # []: remove bad particles from ALL coords
+    D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    DROP_PIDS = [46]  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (1, 10), (150, 225)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -55,8 +54,11 @@ if __name__ == "__main__":
         print("TID: {}".format(TID))
         # ---
         # --- RARELY USED SETTINGS
-        ANIMATE_RZDR = None  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
         USE_GENERIC_DC_TEST_SETTINGS = False  # in rare cases, do not parse FN_IV filename and instead use generic settings
+        # ---
+        PRE_PROCESS_COORDS = PRE_PROCESS  # If you change andor_keithley_delay time, you must pre-process coords.
+        PRE_PROCESS_IV = PRE_PROCESS  # Only needs to be run once per-tid; not dependent on synchronization timing settings.
+        MERGE_COORDS_AND_VOLTAGE = PRE_PROCESS
         # FILEPATHS
         # ---
         # directories
@@ -75,7 +77,7 @@ if __name__ == "__main__":
         FP_TEST_SETTINGS = join(SAVE_SETTINGS, 'dict_tid{}_settings.xlsx'.format(TID))
         # -
         # 3D particle tracking
-        READ_COORDS_DIR = join(BASE_DIR, 'results', 'full-z-range', 'test-idpt_test-{}'.format(TID))
+        READ_COORDS_DIR = join(BASE_DIR, 'results', 'test-idpt_test-{}'.format(TID))
         FN_COORDS_STARTS_WITH = 'test_coords_t'
         FN_COORDS_SAVE = 'tid{}_coords.xlsx'.format(TID)
         FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)

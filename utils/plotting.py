@@ -877,6 +877,7 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
     pr, pz, pdr = przdr
     pdr_ampl = 'r_dr'
     surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
+    surface_profile_subset = dict_surf['subset']
     # -
     # get 3D DPT limits
     rmin = 0
@@ -884,7 +885,7 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
     zmin = np.min([df[pz].min(), surf_z.min()])
     zmax = np.max([df[pz].quantile(0.985), surf_z.max()])  # np.max([df[pz].max(), surf_z.max()])
     # -
-    if dict_surf['subset'] == 'full':
+    if surface_profile_subset == 'full':
         rmin = rmax * -1
     # -
     x_lim = rmin, rmax
@@ -955,12 +956,16 @@ def plot_dz_by_r_by_frame_with_surface_profile(df, przdr, dict_surf, frames, pat
             ax.axhline(zipping_interface_z, 0, 1, ls='--', color='gray', lw=0.5, alpha=0.25, zorder=3.0)
             ax.axvline(zipping_interface_r, 0, 1, ls='--', color='gray', lw=0.5, alpha=0.25, zorder=3.0)
         # -
+        # display time for animation
         if temporal_display_units == 't_sync':
             time_display = '{:.1f} ms'.format(df_frame['t_sync'].mean() * 1e3)
         else:
             time_display = 'fr: {:03d}'.format(frame)
         ax.text(0.0125, 1.0125, time_display, color='black', fontsize=8,
                 horizontalalignment='left', verticalalignment='bottom', transform=ax.transAxes)
+        # show which half of surface profile this is
+        ax.text(0.9875, 0.0125, surface_profile_subset, color='gray', fontsize=8,
+                horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
         # ax.set_title('frame: {:03d}'.format(frame))
         # -
         if title is not None:
@@ -994,6 +999,7 @@ def plot_dz_by_r_by_frois_with_surface_profile(df, przdr, dict_surf, frames, pat
     pr, pz, pdr = przdr
     surf_r = dict_surf['r'] + dict_surf['dr']
     surf_z = (dict_surf['z'] + dict_surf['dz']) * dict_surf['scale_z']
+    surface_profile_subset = dict_surf['subset']
     # -
     # get 3D DPT limits
     rmin = 0
@@ -1071,6 +1077,10 @@ def plot_dz_by_r_by_frois_with_surface_profile(df, przdr, dict_surf, frames, pat
     ax.grid(alpha=0.0625)
     # ax.set_title('frames: {}'.format(frames))
     ax.legend(title=r'$V_{app} \: (V)$', loc='lower right', fontsize='small')
+    # -
+    # show which half of surface profile this is
+    ax.text(0.9875, 0.0125, surface_profile_subset, color='gray', fontsize=8,
+            horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
     plt.tight_layout()
     plt.savefig(join(path_save, 'dz-r_by_frois{}_legend-voltage.png'.format(frames)),
                 dpi=300, facecolor='w')
@@ -1413,7 +1423,7 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
     # if vmax > 10e3: vmax = 10e3
     # norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
     if vmin == vmax:
-        set_title = 'All TIDs {} Hz'.format(df[pc].mean())
+        set_title = 'All TIDs {} Hz'.format(np.round(df[pc].mean(), 1))
     else:
         set_title = None
         norm = colors.LogNorm(vmin=vmin, vmax=vmax)
@@ -1428,7 +1438,7 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
         tids = df_pid['tid'].unique()
 
         # initialize figure
-        fig, ax = plt.subplots(figsize=(5, 3.75))
+        fig, ax = plt.subplots(figsize=(5.5, 3.75))
         # plot model
         if arr_model_VdZ is not None:
             ax.plot(arr_model_VdZ[0], arr_model_VdZ[1], 'k-', label='Model')
@@ -1446,7 +1456,7 @@ def plot_merged_coords_volt_per_pid_by_volt_freq(df, path_save, threshold_pids_b
             ax.set_title('PID: {}'.format(pid))
         else:
             ax.set_title(set_title + ': PID: {}'.format(pid))
-            ax.legend(title='TID', fontsize='xx-small')
+            ax.legend(loc='upper left', bbox_to_anchor=(1, 1), title='TID', fontsize='xx-small')
         ax.set_xlabel(r'$V \: (V)$')
         ax.set_ylabel(r'$z \: (\mu m)$')
         ax.grid(alpha=0.25)
@@ -1694,6 +1704,97 @@ def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, thresho
     plt.savefig(join(path_save, 'errorbars_net-d0zr_by_volt-freq_all_pids__pm{}dB.png'.format(shift_V_by_X_log_freq)),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close(fig)
+
+
+def plot_net_d0zr_frequency_sweeps_per_pid(df, combinations, only_pids, threshold_pids_by_d0z, path_save, poly_deg=2):
+    px, py1, py2 = 'awg_freq', 'dz_mean', 'dr_mean'
+
+    if only_pids is None:
+        only_pids = df[df[py1] < threshold_pids_by_d0z]['id'].unique()
+    df = df[df['id'].isin(only_pids)]
+    if poly_deg == 1:
+        poly_eq = '{}x+{}'
+    elif poly_deg == 2:
+        poly_eq = '{}x^2+{}x+{}'
+    elif poly_deg == 3:
+        poly_eq = '{}x^3+{}x^2+{}x+{}'
+    elif poly_deg == 4:
+        poly_eq = '{}x^4+{}x^3+{}x^2+{}x+{}'
+    elif poly_deg == 5:
+        poly_eq = '{}x^5+{}x^4+{}x^3+{}x^2+{}x+{}'
+    else:
+        raise ValueError('poly_deg must be 1, 2, 3, 4, or 5')
+
+    for result in combinations:
+        # get independent variable
+        if result['remaining_column'] != 'awg_freq':
+            continue
+
+        # parse group definition into a nice standard name
+        # and make directory to save figures into
+        gd = result['group_definition']
+        unique_id = ''
+        if 'test_type' in gd.keys():
+            unique_id += str(gd['test_type']) + '_'
+        if 'output_volt' in gd.keys():
+            unique_id += str(int(gd['output_volt'])) + 'V_'
+        if 'awg_freq' in gd.keys():
+            if gd['awg_freq'] >= 1000:
+                unique_id += str(gd['awg_freq'] / 1000) + 'kHz_'
+            elif gd['awg_freq'] >= 10:
+                unique_id += str(int(gd['awg_freq'])) + 'Hz_'
+            else:
+                unique_id += str(gd['awg_freq']) + 'Hz_'
+        if 'awg_wave' in gd.keys():
+            unique_id += str(gd['awg_wave'])
+        unique_id = unique_id.rstrip('_')
+        path_save_group = join(path_save, unique_id)
+        if not os.path.exists(path_save_group):
+            os.makedirs(path_save_group)
+
+        # get tids in this group
+        tids = result['group_tids']
+        df_tid = df[df['tid'].isin(tids)]
+
+        # get independent variable
+        col_label = result['remaining_column']
+        ncols = int(np.ceil(len(tids) / 16))
+
+        # iterate and plot
+        for pid in only_pids:
+            df_pid = df_tid[df_tid['id'] == pid].sort_values(px, ascending=True)
+
+            # Fit data to a polynomial
+            coefficients = np.polyfit(x=df_pid[px], y=df_pid[py1], deg=poly_deg)
+            polynomial = np.poly1d(coefficients)
+            xf = np.linspace(df_pid[px].min(), df_pid[px].max(), 50)
+
+            fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(6, 5), gridspec_kw={'height_ratios': [1, 0.5]})
+
+            ax1.plot(xf, polynomial(xf), 'k--', lw=0.5,
+                     label=poly_eq.format(*['{:.1e}'.format(c) for c in coefficients]))
+
+            for tid_ in df_pid['tid'].unique():
+                df_pid_tid = df_pid[df_pid['tid'] == tid_]
+                ax1.plot(df_pid_tid[px], df_pid_tid[py1], 'o')
+                ax2.plot(df_pid_tid[px], df_pid_tid[py2], 'o', label=tid_)
+
+            ax1.set_ylabel(r'$\Delta_{o} z \: (\mu m)$')
+            ax1.grid(alpha=0.2)
+            ax1.legend(fontsize='x-small')
+
+            ax2.set_ylabel(r'$\Delta_{o} r \: (\mu m)$')
+            ax2.grid(alpha=0.2)
+            ax2.set_xlabel(r'$f \: (Hz)$')
+            ax2.legend(loc='upper left', bbox_to_anchor=(1, 1), title='TID', fontsize='xx-small', ncol=ncols)
+
+            plt.suptitle(unique_id + ': ' + r'$p_{ID}=$' + '{}'.format(pid))
+            plt.tight_layout()
+            plt.savefig(join(path_save_group, 'pid{}_{}_vs_{}.png'.format(pid, col_label, unique_id)),
+                        dpi=300, facecolor='w', bbox_inches='tight')
+            plt.close(fig)
+
+
 
 def plot_heatmap_net_d0zr_all_pids_by_volt_freq(df, path_save, threshold_pids_by_d0z=0.0, only_test_types=None):
 

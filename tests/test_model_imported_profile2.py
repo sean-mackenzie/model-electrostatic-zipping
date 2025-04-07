@@ -85,7 +85,7 @@ if __name__ == '__main__':
     """
     # ---
     """ NOTE: these values are computed via Bulge Test and/or calculate_pre_stretch_from_residual_stress.py."""
-    MEMB_ID = 'C9-0pT-20nmAu'
+    MEMB_ID = 'C9-0pT_20nmAu'
     MEMB_YOUNGS_MODULUS_BULGE_TEST = 2.5e6  # Pa
     MEMB_RESIDUAL_STRESS_BULGE_TEST = 30e3  # Pa
     EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.0
@@ -97,14 +97,14 @@ if __name__ == '__main__':
     # ---
 
     # general inputs
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
-    WID = 10
+    TEST_CONFIG = '01122025_W12-D1_C9-0pT'
+    WID = 12
     TID = 1
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
     BASE_DIR = join(ROOT_DIR, TEST_CONFIG)
     ANALYSES_DIR = join(BASE_DIR, 'analyses')
     READ_SETTINGS = join(ANALYSES_DIR, 'settings')
-    SAVE_DIR = join(ANALYSES_DIR, 'modeling')
+    SAVE_DIR = join(ANALYSES_DIR, 'modeling', 'other')
     # settings
     FP_SETTINGS = join(READ_SETTINGS, 'dict_settings.xlsx')
     FP_TEST_SETTINGS = join(READ_SETTINGS, 'dict_tid{}_settings.xlsx'.format(TID))
@@ -113,19 +113,19 @@ if __name__ == '__main__':
 
 
     """ NOTE: The model actually uses these values here. You can play with these values. """
-    MODEL_USE_PRE_STRETCH = 1.01  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
+    MODEL_USE_PRE_STRETCH = 1.021  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
     MODEL_USE_YOUNGS_MODULUS = 2.5e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
     MODEL_USE_THICKNESS_DIELECTRIC = 2.0e-6
     MODEL_USE_SURFACE_ROUGHNESS = 1e-9
 
     FID_OVERRIDE = None  # None
-    SURFACE_PROFILE_SUBSET = 'right_half'  # 'left_half', 'right_half', 'full'
-    TCK_SMOOTHING = 0.01
+    SURFACE_PROFILE_SUBSET = 'left_half'  # 'left_half', 'right_half', 'full'
+    TCK_SMOOTHING = 0.0
     SWEEP_PARAM = 'pre_stretch'  # 'E', 'pre_stretch', 'Jm'
     DICT_SETTINGS_RADIUS = DICT_SETTINGS['radius_microns']
-    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 20
+    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 35
 
-    NUM_SEGMENTS = 1000  # NOTE: this isn't necessarily the final number of solver segments
+    NUM_SEGMENTS = 2000  # NOTE: this isn't necessarily the final number of solver segments
     COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
 
     if FID_OVERRIDE is None:
@@ -137,19 +137,18 @@ if __name__ == '__main__':
     SAVE_DIR = join(SAVE_DIR, 'fid{}_E{}_PS{}_{}_s={}_sweep-{}'.format(FID,
                                                                        np.round(MODEL_USE_YOUNGS_MODULUS *1e-6, 1), MODEL_USE_PRE_STRETCH,
                                                                        SURFACE_PROFILE_SUBSET, TCK_SMOOTHING, SWEEP_PARAM))
-
-    SWEEP_VOLTAGES = np.arange(35, 250, 1)
+    SWEEP_VOLTAGES = np.arange(20, 200, 1)
 
     if SWEEP_PARAM == 'E':
         SWEEP_K = 'E'
-        SWEEP_VS = np.array([2.0, 2.25, 2.5]) * 1e6
+        SWEEP_VS = np.array([1.1, 1.5, 2, 2.5]) * 1e6
         SWEEP_K_FIG = "E (MPa)"
         SWEEP_VS_FIGS = np.round(SWEEP_VS * 1e-6, 1)
         SWEEP_K_XLSX = 'E'
         SWEEP_VS_XLSX = [f'{x}MPa' for x in SWEEP_VS_FIGS]
     elif SWEEP_PARAM == 'pre_stretch':
         SWEEP_K = 'pre_stretch'
-        SWEEP_VS = [1.006, 1.01, 1.015, 1.02]
+        SWEEP_VS = [1.0, 1.0025, 1.005, 1.021]
         SWEEP_K_FIG = "Pre-stretch"
         SWEEP_VS_FIGS = SWEEP_VS
         SWEEP_K_XLSX = 'pre_stretch'

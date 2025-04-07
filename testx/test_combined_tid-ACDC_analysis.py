@@ -95,7 +95,10 @@ def get_all_combinations_from_iv_matrix(df_iv_matrix, min_number_per_group, base
     if not os.path.exists(fp_iv_matrix_combinations):
         results_df = pd.DataFrame(combinations)  # Convert the results list into a pandas DataFrame
         # Split the 'group_definition' dictionary into individual columns in the DataFrame
-        group_defs = pd.DataFrame(results_df['group_definition'].tolist())
+        try:
+            group_defs = pd.DataFrame(results_df['group_definition'].tolist())
+        except KeyError:
+            return None
         final_results_df = pd.concat([results_df.drop(columns=['group_definition']), group_defs], axis=1)
         final_results_df.to_excel(fp_iv_matrix_combinations, index=False)
     return combinations
@@ -124,9 +127,12 @@ def get_all_merged_coords_volt(base_dir, save_dir):
         df = make_all_merged_coords_volt(base_dir=base_dir, save_dir=save_dir, return_df=True)
     return df
 
-def get_joined_merged_coords_volt_and_iv_matrix(df_merged_coords_volt, df_iv_matrix, base_dir, save_dir):
+def get_joined_merged_coords_volt_and_iv_matrix(df_merged_coords_volt, df_iv_matrix, base_dir, save_dir, df_mcviv=None):
     filepath = join(save_dir, 'joined_merged-coords-volt_and_iv_matrix.xlsx')
-    if os.path.exists(filepath):
+
+    if df_mcviv is not None:
+        return df_mcviv
+    elif os.path.exists(filepath):
         df = pd.read_excel(filepath)
     else:
         if df_merged_coords_volt is None:
@@ -181,19 +187,19 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
+    TEST_CONFIG = '01272025_W14-F1_C7-20pT'
 
     # Model params
-    VMAX = 350  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 300  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None  # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -80  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -160  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = False  # True False
+    ALL_TRUE = True  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -201,11 +207,13 @@ if __name__ == "__main__":
         make_net_d0zr_per_pid = True
         join_net_d0zr_and_iv_matrix = True
         plot_all_pids_net_d0zr_per_pid_by_tid = True
+        plot_net_d0zr_frequency_sweeps_per_pid = True
         plot_heatmap_of_all_pids_net_d0zr = True
         plot_per_pid_net_d0zr_per_pid_by_tid = True
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = True
         plot_merged_coords_volt_per_pid_by_all_volt_freq = True
         plot_merged_coords_volt_heat_maps = True
+        plot_merged_coords_volt_ascending_only = True
     else:
         # Make/read Excel spreadsheet modifiers
         make_ivac_matrix = False
@@ -217,9 +225,11 @@ if __name__ == "__main__":
         plot_all_pids_net_d0zr_per_pid_by_tid = False
         plot_heatmap_of_all_pids_net_d0zr = False
         plot_per_pid_net_d0zr_per_pid_by_tid = False
+        plot_net_d0zr_frequency_sweeps_per_pid = True
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
-        plot_merged_coords_volt_per_pid_by_all_volt_freq = True
+        plot_merged_coords_volt_per_pid_by_all_volt_freq = False
         plot_merged_coords_volt_heat_maps = False
+        plot_merged_coords_volt_ascending_only = False
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -235,7 +245,7 @@ if __name__ == "__main__":
     READ_SETTINGS = join(SAVE_DIR, 'settings')
     READ_NET_D0ZR = join(SAVE_DIR, 'net-d0zr_per_pid')
     SAVE_COMBINED = join(SAVE_DIR, 'combined')
-    SAVE_COMBINED_MCV = join(SAVE_COMBINED, 'merged-coords-volt_per_tid', 'AC-only')
+    SAVE_COMBINED_MCV = join(SAVE_COMBINED, 'merged-coords-volt_per_tid')
     SAVE_COMBINED_NET_D0ZR = join(SAVE_COMBINED, 'net-d0zr_per_pid_per_tid')
     XYM = 'g'  # 'g' or 'm': use sub-pixel or discrete in-plane localization method
     # filenames
@@ -259,6 +269,7 @@ if __name__ == "__main__":
     DF_IV_MATRIX = None
     COMBINATIONS = None
     DF_MCV = None
+    DF_MCVIV = None
     DF_NET_D0ZR = None
     DF_MODEL_VDZ = None
     DF_MODEL_STRAIN = None
@@ -308,7 +319,8 @@ if __name__ == "__main__":
 
     # --- plot using net-d0z dataset
 
-    if plot_all_pids_net_d0zr_per_pid_by_tid or plot_heatmap_of_all_pids_net_d0zr or plot_per_pid_net_d0zr_per_pid_by_tid:
+    if (plot_all_pids_net_d0zr_per_pid_by_tid or plot_heatmap_of_all_pids_net_d0zr or
+            plot_per_pid_net_d0zr_per_pid_by_tid or plot_net_d0zr_frequency_sweeps_per_pid):
         DFDIV = get_joined_net_d0zr_and_iv_matrix(
             df_net_d0zr_per_pid=DF_NET_D0ZR,
             df_iv_matrix=DF_IV_MATRIX,
@@ -316,6 +328,32 @@ if __name__ == "__main__":
             xym=XYM,
             save_dir=SAVE_COMBINED,
         )
+
+        if plot_net_d0zr_frequency_sweeps_per_pid and len(DFDIV['awg_freq'].unique()) > 2:
+            SAVE_SUB_ANALYSIS = join(SAVE_COMBINED_NET_D0ZR, 'frequency_sweeps')
+            if not os.path.exists(SAVE_SUB_ANALYSIS):
+                os.makedirs(SAVE_SUB_ANALYSIS)
+
+            # DFDIV = DFDIV[DFDIV['awg_freq'] < 1000]
+
+            if COMBINATIONS is None:
+                COMBINATIONS = get_all_combinations_from_iv_matrix(
+                    df_iv_matrix=DF_IV_MATRIX,
+                    min_number_per_group=MIN_TIDS_PER_COMBINATION,
+                    base_dir=BASE_DIR,
+                    save_dir=SAVE_COMBINED,
+                )
+            if COMBINATIONS is not None:
+                plotting.plot_net_d0zr_frequency_sweeps_per_pid(
+                    df=DFDIV,
+                    combinations=COMBINATIONS,
+                    only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
+                    threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
+                    path_save=SAVE_SUB_ANALYSIS,
+                    poly_deg=2,
+                )
+
+        # ---
 
         if plot_all_pids_net_d0zr_per_pid_by_tid:
             plotting.plot_net_d0zr_all_pids_by_volt_freq(
@@ -367,6 +405,7 @@ if __name__ == "__main__":
             df_iv_matrix=DF_IV_MATRIX,
             base_dir=BASE_DIR,
             save_dir=SAVE_COMBINED,
+            df_mcviv=DF_MCVIV,
         )
         # DF_MCVIV = DF_MCVIV[DF_MCVIV['acdc'] == 'AC']
 
@@ -382,14 +421,14 @@ if __name__ == "__main__":
                     base_dir=BASE_DIR,
                     save_dir=SAVE_COMBINED,
                 )
-
-            plotting.plot_parametric_sweeps_per_pid_trajectory_by_tid(
-                df_mcviv=DF_MCVIV,
-                combinations=COMBINATIONS,
-                only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
-                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
-                path_save=SAVE_SUB_ANALYSIS,
-            )
+            if COMBINATIONS is not None:
+                plotting.plot_parametric_sweeps_per_pid_trajectory_by_tid(
+                    df_mcviv=DF_MCVIV,
+                    combinations=COMBINATIONS,
+                    only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
+                    threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
+                    path_save=SAVE_SUB_ANALYSIS,
+                )
 
         if plot_merged_coords_volt_per_pid_by_all_volt_freq:
             SAVE_SUB_ANALYSIS = join(SAVE_COMBINED_MCV, 'per_pid_by_all-volt-freq')
@@ -414,7 +453,27 @@ if __name__ == "__main__":
                 save_id='ascending+descending',
             )
 
-            df = DF_MCVIV
+
+
+    if plot_merged_coords_volt_ascending_only:
+        SAVE_ASC_ANALYSIS = join(SAVE_COMBINED_MCV, 'ascending-only')
+        SAVE_SUB_ANALYSIS = join(SAVE_ASC_ANALYSIS, 'per_pid_by_all-volt-freq')
+        for pth in [SAVE_ASC_ANALYSIS, SAVE_SUB_ANALYSIS]:
+            if not os.path.exists(pth):
+                os.makedirs(pth)
+
+        filepath_ascending = join(SAVE_COMBINED, 'joined_merged-coords-volt_and_iv_matrix_ascending-only.xlsx')
+        if os.path.exists(filepath_ascending):
+            df_ascending = pd.read_excel(filepath_ascending)
+        else:
+            df = get_joined_merged_coords_volt_and_iv_matrix(
+                df_merged_coords_volt=DF_MCV,
+                df_iv_matrix=DF_IV_MATRIX,
+                base_dir=BASE_DIR,
+                save_dir=SAVE_COMBINED,
+                df_mcviv=DF_MCVIV,
+            )
+
             tids = df.tid.unique()
             df_ascending = []
             for tid in tids:
@@ -424,13 +483,23 @@ if __name__ == "__main__":
             df_ascending = pd.concat(df_ascending)
             df_ascending.to_excel(join(SAVE_COMBINED, 'joined_merged-coords-volt_and_iv_matrix_ascending-only.xlsx'))
 
-            plotting.plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(
-                df=df_ascending,
-                path_save=SAVE_COMBINED_MCV,
-                threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
-                only_test_types=ONLY_TEST_TYPES,
-                save_id='ascending-only',
-            )
+        plotting.plot_heatmap_merged_coords_volt_all_pids_by_volt_freq(
+            df=df_ascending,
+            path_save=SAVE_ASC_ANALYSIS,
+            threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
+            only_test_types=ONLY_TEST_TYPES,
+            save_id='ascending-only',
+        )
+
+        # DF_MCVIV = DF_MCVIV[DF_MCVIV['tid'].isin([1, 3])]
+        plotting.plot_merged_coords_volt_per_pid_by_volt_freq(
+            df=df_ascending,
+            path_save=SAVE_SUB_ANALYSIS,
+            threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
+            only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
+            only_test_types=ONLY_TEST_TYPES,
+            arr_model_VdZ=ARR_MODEL_VDZ,
+        )
 
 
     # the below only reads data for specified tids (so it's

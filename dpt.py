@@ -128,9 +128,9 @@ def calculate_lock_in_rolling_min(df, pcols, settings, test_settings, min_period
 
     dfpids = []
     for pid in df['id'].unique():
-        dfpid = df[df['id'] == pid]
+        dfpid = df[df['id'] == pid].reset_index(drop=True)
         for v in pcols:
-            dfpid[v + '_lock_in'] = df[v].rolling(window=samples_per_stimulus,
+            dfpid[v + '_lock_in'] = dfpid[v].rolling(window=samples_per_stimulus,
                                                   min_periods=min_periods, center=center).min()
         dfpids.append(dfpid)
     df = pd.concat(dfpids)
