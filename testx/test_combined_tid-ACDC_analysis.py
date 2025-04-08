@@ -7,6 +7,8 @@ from matplotlib import pyplot as plt
 
 import smu, awg
 from utils import plotting, settings
+from utils.analyses import get_surface_profile_dict
+from utils.empirical import calculate_apparent_radial_displacement_due_to_rotation
 
 
 def make_ivacdc_test_matrix(read_settings, filepath_save):
@@ -143,6 +145,32 @@ def get_joined_merged_coords_volt_and_iv_matrix(df_merged_coords_volt, df_iv_mat
         df.to_excel(filepath, index=False)
     return df
 
+def make_all_zipped_coords(base_dir, save_dir, return_df=False):
+    fn_endswith = '_zipped_coords.xlsx'
+    read_dir = join(base_dir, 'analyses', 'coords')
+    tids = [int(x.split(fn_endswith)[0].split('tid')[1]) for x in os.listdir(read_dir) if x.endswith(fn_endswith)]
+    tids.sort()
+    df = []
+    for tid in tids:
+        print("Reading tid: {} ...".format(tid))
+        df_ = pd.read_excel(join(read_dir, 'tid{}{}'.format(tid, fn_endswith)))
+        df_.insert(0, 'tid', tid)
+        df.append(df_)
+    df = pd.concat(df)
+    df.to_excel(join(save_dir, 'all' + fn_endswith), index=False)
+    if return_df:
+        return df
+
+def get_all_zipped_coords(df_zc, base_dir, save_dir):
+    filepath = join(save_dir, 'all_zipped_coords.xlsx')
+    if df_zc is not None:
+        return df_zc
+    elif os.path.exists(filepath):
+        df = pd.read_excel(filepath)
+    else:
+        df = make_all_merged_coords_volt(base_dir=base_dir, save_dir=save_dir, return_df=True)
+    return df
+
 def make_all_net_d0zr_per_pid(base_dir, xym, save_dir, return_df=False):
     fn = 'net-d0zr_per_pid'
     fn_endswith = '_' + fn + '.xlsx'
@@ -187,10 +215,10 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01272025_W14-F1_C7-20pT'
+    TEST_CONFIG = '02242025_W13-D1_C15-15pT_iter2'
 
     # Model params
-    VMAX = 300  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
@@ -199,11 +227,12 @@ if __name__ == "__main__":
     MIN_TIDS_PER_COMBINATION = 3
     read_model_data = True
 
-    ALL_TRUE = True  # True False
+    ALL_TRUE = False  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
         make_merged_coords_volt = True
+        make_zipped_coords = True
         make_net_d0zr_per_pid = True
         join_net_d0zr_and_iv_matrix = True
         plot_all_pids_net_d0zr_per_pid_by_tid = True
@@ -214,22 +243,25 @@ if __name__ == "__main__":
         plot_merged_coords_volt_per_pid_by_all_volt_freq = True
         plot_merged_coords_volt_heat_maps = True
         plot_merged_coords_volt_ascending_only = True
+        plot_zipped_coords_on_model = True
     else:
         # Make/read Excel spreadsheet modifiers
         make_ivac_matrix = False
         make_ivac_matrix_combinations = False
         make_merged_coords_volt = False
+        make_zipped_coords = True
         make_net_d0zr_per_pid = False
         join_net_d0zr_and_iv_matrix = False
         # plot modifiers
         plot_all_pids_net_d0zr_per_pid_by_tid = False
         plot_heatmap_of_all_pids_net_d0zr = False
         plot_per_pid_net_d0zr_per_pid_by_tid = False
-        plot_net_d0zr_frequency_sweeps_per_pid = True
+        plot_net_d0zr_frequency_sweeps_per_pid = False
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
         plot_merged_coords_volt_per_pid_by_all_volt_freq = False
         plot_merged_coords_volt_heat_maps = False
         plot_merged_coords_volt_ascending_only = False
+        plot_zipped_coords_on_model = True
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -246,12 +278,14 @@ if __name__ == "__main__":
     READ_NET_D0ZR = join(SAVE_DIR, 'net-d0zr_per_pid')
     SAVE_COMBINED = join(SAVE_DIR, 'combined')
     SAVE_COMBINED_MCV = join(SAVE_COMBINED, 'merged-coords-volt_per_tid')
+    SAVE_COMBINED_ZC = join(SAVE_COMBINED, 'zipped-coords_per_tid')
     SAVE_COMBINED_NET_D0ZR = join(SAVE_COMBINED, 'net-d0zr_per_pid_per_tid')
     XYM = 'g'  # 'g' or 'm': use sub-pixel or discrete in-plane localization method
     # filenames
     FN_IV_MATRIX = 'iv_acdc_test_matrix.xlsx'
     FN_IV_MATRIX_COMBINATIONS = 'iv_test_matrix_combinations_n={}.xlsx'
     FN_ALL_MERGED_COORDS_VOLT = 'all_merged-coords-volt.xlsx'
+    FN_ALL_ZIPPED_COORDS = 'all_zipped_coords.xlsx'
     FN_ALL_NET_D0ZR_PER_PID = 'all_net-d0zr_per_pid.xlsx'
     FN_JOINED_MERGED_COORDS_VOLT_AND_IV_MATRIX = 'joined_merged-coords-volt_and_iv_matrix.xlsx'
     FN_JOINED_NET_D0ZR_AND_IV_MATRIX = 'joined_net-d0zr_and_iv_matrix.xlsx'
@@ -259,16 +293,19 @@ if __name__ == "__main__":
     FP_IV_MATRIX = join(SAVE_COMBINED, FN_IV_MATRIX)
     FP_IV_MATRIX_COMBINATIONS = join(SAVE_COMBINED, FN_IV_MATRIX_COMBINATIONS)
     FP_ALL_MERGED_COORDS_VOLT = join(SAVE_COMBINED, FN_ALL_MERGED_COORDS_VOLT)
+    FP_ALL_ZIPPED_COORDS = join(SAVE_COMBINED, FN_ALL_ZIPPED_COORDS)
     FP_ALL_NET_D0ZR_PER_PID = join(SAVE_COMBINED, FN_ALL_NET_D0ZR_PER_PID)
 
     # make dirs
-    for pth in [SAVE_COMBINED, SAVE_COMBINED_NET_D0ZR]:
+    for pth in [SAVE_COMBINED, SAVE_COMBINED_ZC, SAVE_COMBINED_NET_D0ZR]:
         if not os.path.exists(pth):
             os.makedirs(pth)
     # initialize
+    DICT_SETTINGS = None
     DF_IV_MATRIX = None
     COMBINATIONS = None
     DF_MCV = None
+    DF_ZC = None
     DF_MCVIV = None
     DF_NET_D0ZR = None
     DF_MODEL_VDZ = None
@@ -290,6 +327,9 @@ if __name__ == "__main__":
     # stack merged-coords-volt for all tids
     if make_merged_coords_volt:
         DF_MCV = make_all_merged_coords_volt(base_dir=BASE_DIR, save_dir=SAVE_COMBINED, return_df=True)
+    # stack zipped_coords for all tids
+    if make_zipped_coords:
+        DF_ZC = make_all_zipped_coords(base_dir=BASE_DIR, save_dir=SAVE_COMBINED, return_df=True)
     # stack net-d0zr_per_pid for all tids
     if make_net_d0zr_per_pid:
         DF_NET_D0ZR = make_all_net_d0zr_per_pid(base_dir=BASE_DIR, xym=XYM, save_dir=SAVE_COMBINED, return_df=True)
@@ -298,22 +338,38 @@ if __name__ == "__main__":
         DFDIV = get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid=DF_NET_D0ZR, df_iv_matrix=DF_IV_MATRIX,
                                                   base_dir=BASE_DIR, xym=XYM, save_dir=SAVE_COMBINED)
     # read model data
-    if read_model_data:
-        dict_settings = settings.get_settings( fp_settings=join(READ_SETTINGS, 'dict_settings.xlsx'), name='settings')
-        if 'path_model' in dict_settings.keys():
-            mfiles = [x for x in os.listdir(dict_settings['path_model'].strip("'")) if x.endswith('.xlsx')]
+    if read_model_data or plot_zipped_coords_on_model:
+        DICT_SETTINGS = settings.get_settings( fp_settings=join(READ_SETTINGS, 'dict_settings.xlsx'), name='settings')
+        if 'path_model' in DICT_SETTINGS.keys():
+            mfiles = [x for x in os.listdir(DICT_SETTINGS['path_model'].strip("'")) if x.endswith('.xlsx')]
             mfile_z_by_v = [x for x in mfiles if x.endswith('z-by-v.xlsx')][0]
             mfile_strain_by_z = [x for x in mfiles if x.endswith('strain-by-z.xlsx')][0]
 
-            DF_MODEL_VDZ = pd.read_excel(join(dict_settings['path_model'], mfile_z_by_v))
-            DF_MODEL_STRAIN = pd.read_excel(join(dict_settings['path_model'], mfile_strain_by_z))
-        elif 'path_model_dZ_by_V' or 'path_model_strain' in dict_settings.keys():
-            DF_MODEL_VDZ = pd.read_excel(dict_settings['path_model_dZ_by_V'].strip("'"))
-            DF_MODEL_STRAIN = pd.read_excel(dict_settings['path_model_strain'].strip("'"))
+            DF_MODEL_VDZ = pd.read_excel(join(DICT_SETTINGS['path_model'], mfile_z_by_v))
+            DF_MODEL_STRAIN = pd.read_excel(join(DICT_SETTINGS['path_model'], mfile_strain_by_z))
+        elif 'path_model_dZ_by_V' or 'path_model_strain' in DICT_SETTINGS.keys():
+            DF_MODEL_VDZ = pd.read_excel(DICT_SETTINGS['path_model_dZ_by_V'].strip("'"))
+            DF_MODEL_STRAIN = pd.read_excel(DICT_SETTINGS['path_model_strain'].strip("'"))
         if DF_MODEL_VDZ is not None:
             model_V, model_dZ = plotting.pre_process_model_dZ_by_V_for_compare(
-                dfm=DF_MODEL_VDZ, mkey=dict_settings['model_mkey'], mval=dict_settings['model_mval'], extend_max_voltage=VMAX)
+                dfm=DF_MODEL_VDZ, mkey=DICT_SETTINGS['model_mkey'], mval=DICT_SETTINGS['model_mval'], extend_max_voltage=VMAX)
             ARR_MODEL_VDZ = (model_V, model_dZ)
+    # read surface profile data
+    if plot_zipped_coords_on_model:
+        if DICT_SETTINGS is None:
+            DICT_SETTINGS = settings.get_settings( fp_settings=join(READ_SETTINGS, 'dict_settings.xlsx'), name='settings')
+        dict_surface_profilometry = get_surface_profile_dict(DICT_SETTINGS)
+        surf_r, surf_z = dict_surface_profilometry['r'], dict_surface_profilometry['z']
+
+        POLY_DEG = 9
+        func_apparent_r_displacement = calculate_apparent_radial_displacement_due_to_rotation(
+            surf_r=surf_r,
+            surf_z=surf_z,
+            poly_deg=POLY_DEG,
+            membrane_thickness=DICT_SETTINGS['membrane_thickness'],
+            z_clip=-0.85,  # -0.125 for most; (for W11: -0.8; for W13: -0.85)
+            path_save=SAVE_COMBINED_ZC,
+        )
 
     # ---
 
@@ -453,7 +509,7 @@ if __name__ == "__main__":
                 save_id='ascending+descending',
             )
 
-
+    # -
 
     if plot_merged_coords_volt_ascending_only:
         SAVE_ASC_ANALYSIS = join(SAVE_COMBINED_MCV, 'ascending-only')
@@ -499,6 +555,32 @@ if __name__ == "__main__":
             only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
             only_test_types=ONLY_TEST_TYPES,
             arr_model_VdZ=ARR_MODEL_VDZ,
+        )
+
+    # -
+
+    # ---
+
+    # --- plot using zipped_coords dataset
+
+
+    if plot_zipped_coords_on_model:
+        DF_ZC = get_all_zipped_coords(
+            df_zc=DF_ZC,
+            base_dir=BASE_DIR,
+            save_dir=SAVE_COMBINED,
+        )
+
+        plotting.compare_corrected_zipped_stretch_with_model(
+            df=DF_ZC,
+            dfm=DF_MODEL_STRAIN,
+            correction_function=func_apparent_r_displacement,
+            pr='rg',
+            pdr='drg',
+            pdz='d0z',
+            path_results=SAVE_COMBINED_ZC,
+            save_id='poly-deg={}_zipped-df_corr-dr'.format(POLY_DEG),
+            poly_deg_id=POLY_DEG,
         )
 
 

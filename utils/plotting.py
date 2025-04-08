@@ -331,7 +331,7 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, corr
     lw = 0.75
     ms = 2
 
-    fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(5, 6))
+    fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(4.5, 6))
 
     ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})')
     ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Data (on-sidewall)')
@@ -350,6 +350,64 @@ def compare_corrected_depth_dependent_in_plane_stretch_with_model(dfd, dfm, corr
     ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected')
     ax2.plot(x, y3, 'ko', ms=ms, label='Data-Raw')
     ax2.plot(xo, y3o, '^', ms=ms, color='tab:orange', alpha=0.5, label='Data-Raw (non-sidewall)')
+    ax2.set_ylabel(ylabel)
+    ax2.set_xlabel(xlabel)
+    ax2.grid(alpha=0.15)
+    ax2.legend(fontsize='xx-small', loc='upper left')
+
+    plt.tight_layout()
+    plt.savefig(join(path_results, f'compare_tilt-corrected_{save_id}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+def compare_corrected_zipped_stretch_with_model(df, dfm, correction_function, pr, pdr, pdz,
+                                                path_results, save_id, poly_deg_id):
+
+    # setup
+    ylabel = r'$\Delta r \: (\mu m)$'
+    if pdz == 'd0z':
+        xlabel = r'$\Delta_{o} z \: (\mu m)$'
+    elif pdz == 'dz':
+        xlabel = r'$\Delta z \: (\mu m)$'
+    else:
+        raise ValueError('pdz must be specified: dz or d0z')
+    pdr_corr, dr_corr = 'drg_corr', 'dr_corr'
+
+    # apply correction
+    df[dr_corr] = correction_function(df[pr])
+    df[pdr_corr] = df[pdr] + df[dr_corr]
+
+    # --- 3D DPT data
+    x, y3, y3_corr, dy3_corr = df[pdz].abs(), df[pdr], df[pdr_corr], df[dr_corr]
+
+    # --- Model data
+    # for radial displacement, we want all data
+    mx3 = dfm['dZ'].to_numpy() * 1e6
+    my3 = dfm['disp_r_microns'].to_numpy()
+    dfm['dr_corr'] = correction_function(dfm['x_i'] * 1e6 / 2)
+    dfm['disp_r_microns_corr'] = dfm['disp_r_microns'] - dfm['dr_corr']
+    my3_corr = dfm['disp_r_microns_corr'].to_numpy()
+
+    # --- plot
+    lw = 0.75
+    ms = 2
+
+    fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(4.5, 6))
+
+    ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})')
+    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Zipped Data')
+    ax0.set_ylabel(r'$\Delta_{corr} r \: (\mu m)$')
+    ax0.grid(alpha=0.15)
+    ax0.legend(fontsize='xx-small')
+
+    ax1.plot(mx3, my3, 'k-', lw=lw, label='Model-Raw')
+    ax1.plot(x, y3_corr, 'ro', ms=ms, label='Zipped Data-Corrected')
+    ax1.set_ylabel(ylabel)
+    ax1.grid(alpha=0.15)
+    ax1.legend(fontsize='xx-small', loc='upper left')
+
+    ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected')
+    ax2.plot(x, y3, 'ko', ms=ms, label='Zipped Data-Raw')
     ax2.set_ylabel(ylabel)
     ax2.set_xlabel(xlabel)
     ax2.grid(alpha=0.15)
@@ -400,7 +458,7 @@ def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, 
     ax3.grid(alpha=0.15)
     ax3.legend(fontsize='small')
     plt.tight_layout()
-    plt.savefig(join(path_results, f'compare_depth_dependent_in_plane_stretch_with_model_{save_id}.png'),
+    plt.savefig(join(path_results, f'compare_stretch_with_model_{save_id}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
 

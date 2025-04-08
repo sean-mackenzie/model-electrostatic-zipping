@@ -224,18 +224,18 @@ def calculate_apparent_radial_displacement_due_to_rotation(surf_r, surf_z, poly_
     # Plotting original data, fitted function, and derivative
     import matplotlib.pyplot as plt
     from os.path import join
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(7, 8))
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(4.5, 6))  # (7, 8)
     # ax1.scatter(x, y, s=4, alpha=0.95, label='Surface profile')
     ax1.plot(x, y, 'k-', label='Surface profile')
-    ax1.plot(x, polynomial(x), 'r--', label=f'{poly_deg}-deg Polynominal')
+    ax1.plot(x, polynomial(x), 'r-', lw=0.85, label=f'{poly_deg}-deg Polynominal')
     ax2.plot(x, polynomial_derivative(x), label='Derivative (Slope)', color='green', linestyle='--')
     ax3.plot(x, angle_degrees, label='Angle (degrees)', color='purple')
     ax4.plot(x, apparent_displacement, label='Apparent Displacement', color='orange')
     ax4.axvline(x.min(), label='rmin={}'.format(np.round(x.min(), 1)), color='k', lw=0.5, linestyle='--')
     ax4.axvline(x.max(), label='rmax={}'.format(np.round(x.max(), 1)), color='k', lw=0.5, linestyle='--')
-    ax1.legend()
-    ax2.legend()
-    ax4.legend(fontsize='small', loc='upper left')
+    ax1.legend(fontsize='x-small')
+    ax2.legend(fontsize='x-small')
+    ax4.legend(fontsize='xx-small', loc='upper left')
     ax1.set_ylabel(r'$z \: (\mu m)$')
     ax2.set_ylabel('slope')
     ax3.set_ylabel('angle (degrees)')

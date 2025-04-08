@@ -9,20 +9,40 @@ import smu, awg, dpt
 from utils import settings, analyses, plotting, empirical
 
 
+def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
+    # initialize variables
+    pr, pz, pdr = przdr
+    surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
+    # -
+    if frames is None:
+        frames = df['frame'].unique()
+        frames.sort()
+    # -
+    df_frames = []
+    for frame in frames:
+        df_frame = df[df['frame'] == frame].sort_values(pr)
 
+        zipping_interface_r, zipping_interface_z = empirical.get_zipping_interface_rz(
+            r=df_frame[pr].to_numpy(),
+            z=df_frame[pz].to_numpy(),
+            surf_r=surf_r,
+            surf_z=surf_z,
+        )
+
+        df_frame = df_frame[(df_frame[pr] > zipping_interface_r) & (df_frame[pz] > zipping_interface_z)]
+        df_frame['zipping_interface_r'] = zipping_interface_r
+        df_frame['zipping_interface_z'] = zipping_interface_z
+        df_frames.append(df_frame)
+    df_frames = pd.concat(df_frames)
+    return df_frames
 
 if __name__ == "__main__":
-    """
-    NOTES:
-        1. requires: analyses/settings/dict_settings.xlsx
-        2. requires: MODEL_MKEY, MODEL_MVAL = 'pre_stretch', 1.01 
-    """
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01272025_W14-F1_C7-20pT'
-    TIDS = [8]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
-    IV_ACDC = 'DC'  # 'AC' or 'DC'
-    ANIMATE_FRAMES = np.arange(30, 155)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    TEST_CONFIG = '02242025_W13-D1_C15-15pT_iter2'
+    TIDS = [6]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    IV_ACDC = 'AC'  # 'AC' or 'DC'
+    ANIMATE_FRAMES = np.arange(20, 35)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
     # -
     # SETTINGS (True False)
@@ -35,15 +55,17 @@ if __name__ == "__main__":
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = True  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = True, 70  # True: export dfd0 to special directory
+    EXPORT_NET_D0ZR, AVG_MAX_N = True, 15  # True: export dfd0 to special directory
+    EXPORT_ZIPPED_COORDS = True
+    ZIPPED_ONLY_FRAMES = None
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
     D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
-    DROP_PIDS = [46]  # []: remove bad particles from ALL coords
+    DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (1, 10), (150, 225)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (1, 25), (410, 450)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -80,6 +102,7 @@ if __name__ == "__main__":
         READ_COORDS_DIR = join(BASE_DIR, 'results', 'test-idpt_test-{}'.format(TID))
         FN_COORDS_STARTS_WITH = 'test_coords_t'
         FN_COORDS_SAVE = 'tid{}_coords.xlsx'.format(TID)
+        FN_COORDS_SAVE_ZIPPED = 'tid{}_zipped_coords.xlsx'.format(TID)
         FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)
         # FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(D0F_IS_TID)
         # -
@@ -93,6 +116,8 @@ if __name__ == "__main__":
         # Merged (3DPT + Keithley)
         FN_MERGED = 'tid{}_merged-coords-volt.xlsx'.format(TID)
         # -
+        # Initialize
+        DF_ZIPPED = None
         # -
         # make dirs
         for pth in [SAVE_DIR, SAVE_SETTINGS, SAVE_COORDS]:
@@ -318,6 +343,18 @@ if __name__ == "__main__":
                     path_results=SAVE_DIR,
                     average_max_n_positions=AVG_MAX_N,
                 )
+
+        # ---
+        # EXPORT COORDINATES OF ONLY "ZIPPED" POSITIONS"
+        if EXPORT_ZIPPED_COORDS:
+            DF_ZIPPED = calculate_zipping_interface(
+                df=DF,
+                przdr=ANIMATE_RZDR,
+                dict_surf=analyses.get_surface_profile_dict(DICT_SETTINGS),
+                frames=ZIPPED_ONLY_FRAMES,
+            )
+            DF_ZIPPED.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE_ZIPPED), index=False)
+
         # ---
         # SECOND-PASS EVALUATION
         # ---
@@ -335,6 +372,7 @@ if __name__ == "__main__":
                     path_results=PATH_REPRESENTATIVE,
                     animate_frames=ANIMATE_FRAMES,
                     animate_rzdr=ANIMATE_RZDR,
+                    df_zipped=DF_ZIPPED,
                 )
 
     print("Completed without errors.")
