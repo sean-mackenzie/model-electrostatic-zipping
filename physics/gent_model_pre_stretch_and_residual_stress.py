@@ -7,8 +7,8 @@ from utils import energy
 if __name__ == '__main__':
 
     # Material parameters of pristine material (i.e., before pre-stretching)
-    E = 1000  # (kPa) Young's modulus
-    J_M = 80  # extensibility constant for Gent hyperelastic model
+    E = 1100  # (kPa) Young's modulus
+    J_M = 54  # extensibility constant for Gent hyperelastic model
 
     KNOWN_PRE_STRETCH = 1.131
     KNOWN_SIGMA_0 = 260  # (kPa) residual stress

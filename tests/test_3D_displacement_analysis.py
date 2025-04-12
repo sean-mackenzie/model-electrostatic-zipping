@@ -39,10 +39,10 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02242025_W13-D1_C15-15pT_iter2'
-    TIDS = [6]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
+    TIDS = [8]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     IV_ACDC = 'AC'  # 'AC' or 'DC'
-    ANIMATE_FRAMES = np.arange(20, 35)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    ANIMATE_FRAMES = np.arange(40, 200)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
     # -
     # SETTINGS (True False)
@@ -50,13 +50,13 @@ if __name__ == "__main__":
     PLOT_SETTINGS_IMAGE_OVERLAY = False  # only need to run once per test configuration
     # -
     # PRE-PROCESSING (True False)
-    PRE_PROCESS = True
+    PRE_PROCESS = False
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = True  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = True, 15  # True: export dfd0 to special directory
-    EXPORT_ZIPPED_COORDS = True
+    EXPORT_NET_D0ZR, AVG_MAX_N = False, 50  # True: export dfd0 to special directory
+    EXPORT_ZIPPED_COORDS = False
     ZIPPED_ONLY_FRAMES = None
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
@@ -145,6 +145,7 @@ if __name__ == "__main__":
         # SETTINGS
         # ---
         DICT_SETTINGS, DICT_TEST = settings.settings_handler(settings_handler_dict=SETTINGS_HANDLER_DICT)
+
         # ---
         """
         if not os.path.exists(join(SAVE_COORDS, FN_MERGED)):
@@ -353,7 +354,8 @@ if __name__ == "__main__":
                 dict_surf=analyses.get_surface_profile_dict(DICT_SETTINGS),
                 frames=ZIPPED_ONLY_FRAMES,
             )
-            DF_ZIPPED.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE_ZIPPED), index=False)
+            if len(DF_ZIPPED) > 0:
+                DF_ZIPPED.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE_ZIPPED), index=False)
 
         # ---
         # SECOND-PASS EVALUATION
@@ -373,6 +375,7 @@ if __name__ == "__main__":
                     animate_frames=ANIMATE_FRAMES,
                     animate_rzdr=ANIMATE_RZDR,
                     df_zipped=DF_ZIPPED,
+                    average_max_n=AVG_MAX_N,
                 )
 
     print("Completed without errors.")

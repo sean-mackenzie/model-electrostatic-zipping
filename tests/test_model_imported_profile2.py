@@ -83,72 +83,130 @@ if __name__ == '__main__':
                 I'm going to use the same parameters as C21-15pT-30nmAu: E = 1 MPa, residual stress = 250 kPa to start.
         
     """
+
+    """ 
+    VERY IMPORTANT NOTE:
+    MEMB_THICKNESS_USE_PRE_STRETCH:    pre-stretch that defines the thickness of the membrane
+    MODEL_USE_PRE_STRETCH:             pre-stretch to account for stress due to both (1) pre-stretch, and (2) metal dep.
+
+    MEMB_THICKNESS_USE_PRE_STRETCH:    can only be defined by nominal or measured pre-stretch (i.e., before metal dep.)
+    MODEL_USE_PRE_STRETCH:             is ideally defined by bulge test results (i.e., after metal dep.) 
+    """
+
+
     # ---
     """ NOTE: these values are computed via Bulge Test and/or calculate_pre_stretch_from_residual_stress.py."""
-    MEMB_ID = 'C15-15pT-25nmAu'
-    MEMB_YOUNGS_MODULUS_BULGE_TEST = 43e6  # Pa
-    MEMB_RESIDUAL_STRESS_BULGE_TEST = 194e3  # Pa
-    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.15
-    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.146
-    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 245e3  # Pa
-    GENT_MODEL_COMPUTED_PRE_STRETCH = 1.129
-    GENT_MODEL_J_MEMB = 54  # Elastosil 200 um thick: 54 or 16; Maffli et al. NuSil: 80.4
+    # MEMB_ID = 'C19-30pT_20+10nmAu'
+    # MEMB_YOUNGS_MODULUS_BULGE_TEST = 1e6  # Pa
+    # MEMB_RESIDUAL_STRESS_BULGE_TEST = 260e3  # Pa
+    # EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.3
+    # EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.131
+    # GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 223e3  # Pa
+    # GENT_MODEL_COMPUTED_PRE_STRETCH = 1.156
 
-    # ---
 
     # general inputs
-    TEST_CONFIG = '02242025_W13-D1_C15-15pT_iter2'
+    TEST_CONFIG = '03052025_W13-D1_C19-30pT_20+10nmAu'
     WID = 13
     TID = 1
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
     BASE_DIR = join(ROOT_DIR, TEST_CONFIG)
     ANALYSES_DIR = join(BASE_DIR, 'analyses')
     READ_SETTINGS = join(ANALYSES_DIR, 'settings')
-    SAVE_DIR = join(ANALYSES_DIR, 'modeling', 'other')
+    SAVE_DIR = join(ANALYSES_DIR, 'modeling', 'compare-to-energy')
     # settings
     FP_SETTINGS = join(READ_SETTINGS, 'dict_settings.xlsx')
     FP_TEST_SETTINGS = join(READ_SETTINGS, 'dict_tid{}_settings.xlsx'.format(TID))
     DICT_SETTINGS = settings.get_settings(fp_settings=FP_SETTINGS, name='settings', update_dependent=False)
+    # ---
     FID_PROCESS_PROFILE = DICT_SETTINGS['fid_process_profile']
-
-
-    """ NOTE: The model actually uses these values here. You can play with these values. """
-    MODEL_USE_PRE_STRETCH = 1.003  # GENT_MODEL_COMPUTED_PRE_STRETCH  # pre-stretch
-    MODEL_USE_YOUNGS_MODULUS = 1e6  # (Pa) MEMB_YOUNGS_MODULUS_BULGE_TEST
-    MODEL_USE_THICKNESS_DIELECTRIC = 2.0e-6
-    MODEL_USE_SURFACE_ROUGHNESS = 1e-9
-
-    FID_OVERRIDE = None  # None
-    SURFACE_PROFILE_SUBSET = 'left_half'  # 'left_half', 'right_half', 'full'
-    TCK_SMOOTHING = 150.0
-    SWEEP_PARAM = 'E'  # 'E', 'pre_stretch', 'Jm'
+    FID_OVERRIDE = None
     DICT_SETTINGS_RADIUS = DICT_SETTINGS['radius_microns']
-    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 35
-
-    NUM_SEGMENTS = 2000  # NOTE: this isn't necessarily the final number of solver segments
-    COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
-
     if FID_OVERRIDE is None:
         FID = DICT_SETTINGS['fid_process_profile']
     else:
         FID = FID_OVERRIDE
 
-    SAVE_ID = 'wid{}_fid{}'.format(WID, FID)
-    SAVE_DIR = join(SAVE_DIR, 'fid{}_E{}_PS{}_{}_s={}_sweep-{}'.format(FID,
-                                                                       np.round(MODEL_USE_YOUNGS_MODULUS *1e-6, 1), MODEL_USE_PRE_STRETCH,
-                                                                       SURFACE_PROFILE_SUBSET, TCK_SMOOTHING, SWEEP_PARAM))
-    SWEEP_VOLTAGES = np.arange(45, 200, 1)
+    # -------------------------------
 
+    # --- STEP 0. DEFINE "CONSTANTS"
+    # Membrane
+    MEMB_ORIGINAL_THICKNESS = 20  # (microns)
+    MEMB_ORIGINAL_YOUNGS_MODULUS = 1.1e6  # (Pa)    [between 1.0 and 1.2 in literature and from my bulge tests]
+    MEMB_ORIGINAL_RELATIVE_PERMITTIVITY = 3.26  #   [according to the literature]
+    MEMB_ORIGINAL_GENT_MODEL_J_MEMB = 54  #         [Elastosil 200 um thick: 54 or 16; Maffli et al. NuSil: 80.4]
+    # Si+SiO2 Surface Profile
+    SURFACE_DIELECTRIC_RELATIVE_PERMITTIVITY = 3.9  # 4/9/25: changed to 3.9; previously 3.0
+    SURFACE_DIELECTRIC_SURFACE_ROUGHNESS = 1e-9  # (units: meters) I think it would be fair to vary this
+
+    # --- ---   THE FOLLOWING VALUES SHOULD BE FAITHFUL TO THE DATA (THEY ARE FOR REFERENCE, NOT USED IN MODEL)
+    # --- STEP 1. DEFINE THE MEMBRANE
+    MEMB_ID = 'C19-30pT_20+10nmAu'
+    # --- STEP 2. PRE-STRETCH
+    EXPERIMENTAL_PRE_STRETCH_NOMINAL = 1.3
+    EXPERIMENTAL_PRE_STRETCH_MEASURED = 1.131
+    MEMB_THICKNESS_POST_MEASURED_PRE_STRETCH = np.round(
+        energy.calculate_stretched_thickness(MEMB_ORIGINAL_THICKNESS, EXPERIMENTAL_PRE_STRETCH_MEASURED), 2)
+    GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 223e3  # Pa
+    # --- STEP 3. BULGE TEST
+    MEMB_YOUNGS_MODULUS_BULGE_TEST = 1.1e6  # Pa
+    MEMB_RESIDUAL_STRESS_BULGE_TEST = 260e3  # Pa
+    GENT_MODEL_COMPUTED_PRE_STRETCH_FROM_RESIDUAL_STRESS_BULGE_TEST = 1.156
+    # ---
+    # --- ---   THE FOLLOWING VALUES ARE USED BY THE MODEL (SOME LEEWAY IS ALLOWED, DEPENDING ON A GIVEN SCENARIO)
+    # --- STEP A. PHYSICAL PROPERTIES
+    # Membrane thickness
+    MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS = 1.13  # pre-stretch used ONLY to define membrane thickness
+    MODEL_USE_MEMB_THICKNESS = np.round(
+        energy.calculate_stretched_thickness(MEMB_ORIGINAL_THICKNESS, MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS), 2)
+    # --- STEP B. MECHANICAL PROPERTIES
+    # Effective pre-stretch: accounts for stresses due to (1) pre-stretch, and (2) residual stress from metal dep.
+    MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS = 1.025
+    MODEL_USE_YOUNGS_MODULUS = 5.5  # (MPa)
+    # --- STEP C. ELECTRICAL PROPERTIES
+    MODEL_USE_THICKNESS_DIELECTRIC = 2.0  # (microns)
+    # Rarely should you change these. If you do, change them here (and not in the constants section)
+    MODEL_USE_DIELECTRIC_RELATIVE_PERMITTIVITY = SURFACE_DIELECTRIC_RELATIVE_PERMITTIVITY  # 3.9
+    MODEL_USE_SURFACE_ROUGHNESS = SURFACE_DIELECTRIC_SURFACE_ROUGHNESS  # 1e-9
+    # ---
+    # Solver
+    SWEEP_PARAM = 'E'  # 'E', 'pre_stretch', 'Jm'
+    SWEEP_VALS = [3.5, 5.5, 7.5, 9.5]  # units for E are MPa (i.e., do not include 1e6 here)
+    SWEEP_VOLTAGES = np.arange(45, 250, 0.5)
+    NUM_SEGMENTS = 2000  # NOTE: this isn't necessarily the final number of solver segments
+    # Surface profile
+    SURFACE_PROFILE_SUBSET = 'right_half'  # 'left_half', 'right_half', 'full'
+    TCK_SMOOTHING = 250.0
+    MODEL_USE_RADIUS = DICT_SETTINGS_RADIUS + 35
+
+    # -
+
+    # ---   YOU REALLY SHOULDN'T NEED TO CHANGE ANYTHING BELOW
+    # -
+    print("Membrane thickness after {} pre-stretch: {} microns".format(EXPERIMENTAL_PRE_STRETCH_MEASURED, MEMB_THICKNESS_POST_MEASURED_PRE_STRETCH))
+    print("(USED IN MODEL) Membrane thickness after {} pre-stretch: {} microns".format(MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS, MODEL_USE_MEMB_THICKNESS))
+    # -
+    # raise ValueError()
+    # -
+
+    # ---
+
+    # -
+    SAVE_ID = 'wid{}_fid{}'.format(WID, FID)
+    SAVE_DIR = join(SAVE_DIR, 'fid{}-{}-s={}_t{}um_E{}_PS{}_sweep-{}'.format(
+        FID, SURFACE_PROFILE_SUBSET, TCK_SMOOTHING, MODEL_USE_MEMB_THICKNESS, MODEL_USE_YOUNGS_MODULUS,
+        MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS, SWEEP_PARAM))
+    # -
     if SWEEP_PARAM == 'E':
         SWEEP_K = 'E'
-        SWEEP_VS = np.array([2.5, 10, 12, 14]) * 1e6
+        SWEEP_VS = np.array(SWEEP_VALS) * 1e6
         SWEEP_K_FIG = "E (MPa)"
         SWEEP_VS_FIGS = np.round(SWEEP_VS * 1e-6, 1)
         SWEEP_K_XLSX = 'E'
         SWEEP_VS_XLSX = [f'{x}MPa' for x in SWEEP_VS_FIGS]
     elif SWEEP_PARAM == 'pre_stretch':
         SWEEP_K = 'pre_stretch'
-        SWEEP_VS = [1.05, 1.129, 1.146, 1.159]
+        SWEEP_VS = SWEEP_VALS
         SWEEP_K_FIG = "Pre-stretch"
         SWEEP_VS_FIGS = SWEEP_VS
         SWEEP_K_XLSX = 'pre_stretch'
@@ -169,7 +227,6 @@ if __name__ == '__main__':
         SWEEP_VS_XLSX = ['{} MPa'.format(np.round(MODEL_USE_YOUNGS_MODULUS / 1e6, 2))]
     else:
         raise ValueError('Invalid sweep parameter: {}'.format(SWEEP_PARAM))
-
     if not os.path.exists(SAVE_DIR):
         os.makedirs(SAVE_DIR)
     #  directories
@@ -179,7 +236,6 @@ if __name__ == '__main__':
             os.makedirs(pth)
     FN_TCK = 'fid{}_tc_k=3.xlsx'.format(FID)
     FP_TCK = join(READ_TCK, FN_TCK)
-
     # surface profile
     INCLUDE_THROUGH_HOLE = True
     DF_SURFACE = empirical.read_surface_profile(
@@ -188,16 +244,12 @@ if __name__ == '__main__':
         hole=INCLUDE_THROUGH_HOLE,
         fid_override=FID_OVERRIDE,
     )
-
     # specific inputs
     DEPTH = DF_SURFACE['z'].abs().max()
     RADIUS = MODEL_USE_RADIUS
     MAX_DZ_FOR_STRAIN_PLOT = DEPTH - 2
     UNITS = 1e-6
-
     # ---
-    PRE_PROCESS_TCK = True
-    # if PRE_PROCESS_TCK or not os.path.exists(FP_TCK):
     # --- --- MANUALLY FIT TCK AND EXPORT
     SMOOTHING = TCK_SMOOTHING  # 50
     NUM_POINTS = 500
@@ -224,34 +276,25 @@ if __name__ == '__main__':
     with pd.ExcelWriter(FP_TCK) as writer:
         for sheet_name, df, idx, idx_lbl in zip(['tck', 'settings'], [DF_TCK, DF_TCK_SETTINGS], [False, True], [None, 'k']):
             df.to_excel(writer, sheet_name=sheet_name, index=idx, index_label=idx_lbl)
-    #else:
-    #    DF_TCK = pd.read_excel(FP_TCK, sheet_name='tck')
-
     dict_fid = dict_from_tck(WID, FID, DEPTH, RADIUS, UNITS, NUM_SEGMENTS, fp_tck=FP_TCK, r_min=rmin)
-
-    # ----
-
     # ---
-
     # ---
+    # surface
     config = 'MoB'
     shape = 'circle'
     diameter = dict_fid['radius'] * 2 * UNITS
     depth = DEPTH * UNITS
-    pre_stretch = MODEL_USE_PRE_STRETCH
-    t = 20e-6  # membrane thickness = 25 microns
-    t_diel = MODEL_USE_THICKNESS_DIELECTRIC
-
-    # material
-    Youngs_Modulus = MODEL_USE_YOUNGS_MODULUS
-    # mu_memb = Youngs_Modulus / 3  # 0.42e6
-    J_memb = GENT_MODEL_J_MEMB  # 80.4
-    eps_r_memb = 3.0
-    eps_r_diel = 3.0
+    t_diel = MODEL_USE_THICKNESS_DIELECTRIC * UNITS
+    eps_r_diel = MODEL_USE_DIELECTRIC_RELATIVE_PERMITTIVITY
     surface_roughness_diel = MODEL_USE_SURFACE_ROUGHNESS  # units: meters
-
-    # voltage (can be made a dependent variable or hard-coded?)
-    U_is = SWEEP_VOLTAGES   # np.arange(25, 150, 0.5)  # (5, 255, 5)
+    # membrane
+    t = MODEL_USE_MEMB_THICKNESS * UNITS
+    pre_stretch = MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS
+    Youngs_Modulus = MODEL_USE_YOUNGS_MODULUS * 1e6  # Shear modulus, mu_memb = Youngs_Modulus / 3
+    J_memb = MEMB_ORIGINAL_GENT_MODEL_J_MEMB
+    eps_r_memb = MEMB_ORIGINAL_RELATIVE_PERMITTIVITY
+    # test: voltage
+    U_is = SWEEP_VOLTAGES
 
     DICT_MODEL_SETTINGS = {
         'save_id': SAVE_ID,
@@ -262,25 +305,30 @@ if __name__ == '__main__':
         'surface_fid_override': FID_OVERRIDE,
         'surface_profile_subset': SURFACE_PROFILE_SUBSET,
         'surface_include_hole': INCLUDE_THROUGH_HOLE,
+        'surface_relative_permittivity_dielectric': SURFACE_DIELECTRIC_RELATIVE_PERMITTIVITY,
         'depth': DEPTH,
         'radius': RADIUS,
         'dict_settings_radius': DICT_SETTINGS_RADIUS,
         'tck_smoothing': SMOOTHING,
         'max_dz_for_strain_plot': MAX_DZ_FOR_STRAIN_PLOT,
-        'memb_youngs_modulus_bulge_test': MEMB_YOUNGS_MODULUS_BULGE_TEST,
-        'memb_residual_stress_bulge_test': MEMB_RESIDUAL_STRESS_BULGE_TEST,
+        'memb_original_thickness': MEMB_ORIGINAL_THICKNESS,
+        'memb_original_youngs_modulus': MEMB_ORIGINAL_YOUNGS_MODULUS,
         'experimental_pre_stretch_nominal': EXPERIMENTAL_PRE_STRETCH_NOMINAL,
         'experimental_pre_stretch_measured': EXPERIMENTAL_PRE_STRETCH_MEASURED,
+        'memb_thickness_post_measured_pre_stretch': MEMB_THICKNESS_POST_MEASURED_PRE_STRETCH,
         'gent_model_computed_residual_stress_from_pre_stretch_measured': GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED,
-        'gent_model_computed_pre_stretch': GENT_MODEL_COMPUTED_PRE_STRETCH,
-        'gent_model_j_memb': GENT_MODEL_J_MEMB,
+        'model_use_pre_metal_pre_stretch_for_membrane_thickness': MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS,
+        'memb_youngs_modulus_bulge_test': MEMB_YOUNGS_MODULUS_BULGE_TEST,
+        'memb_residual_stress_bulge_test': MEMB_RESIDUAL_STRESS_BULGE_TEST,
+        'gent_model_computed_pre_stretch_from_residual_stress_bulge_test': GENT_MODEL_COMPUTED_PRE_STRETCH_FROM_RESIDUAL_STRESS_BULGE_TEST,
+        'gent_model_j_memb': MEMB_ORIGINAL_GENT_MODEL_J_MEMB,
         'units': UNITS,
         'model_num_segments': NUM_SEGMENTS,
         'model_config': config,
         'model_shape': shape,
         'model_diameter_um': diameter,
         'model_depth_um': depth,
-        'model_thickness_membrane_um': t,
+        'model_thickness_membrane_um': t*1e6,
         'model_pre_stretch': pre_stretch,
         'model_thickness_dielectric_um': t_diel,
         'model_youngs_modulus': Youngs_Modulus,
@@ -297,8 +345,6 @@ if __name__ == '__main__':
 
     # profile to use
     px, py = dict_fid['r'], dict_fid['z']
-    #px = np.linspace(px.min(), px.max(), 3000)
-    #py = np.linspace(py.max(), py.min(), 3000)
     if not os.path.exists(join(SAVE_DIR, SAVE_ID + '_profile.png')):
         fig, ax = plt.subplots(figsize=(5, 3))
         ax.plot(px * 1e3, py * 1e6, label=np.round(np.min(py * 1e6), 1))
@@ -310,10 +356,8 @@ if __name__ == '__main__':
         plt.suptitle(SAVE_ID)
         plt.tight_layout()
         plt.savefig(join(SAVE_DIR, SAVE_ID + '_profile.png'), facecolor='w')
-        plt.show()
         plt.close()
         #"""
-
 
     # dict_actuator: shape, profile_x, profile_z, membrane_thickness, pre_stretch, dielectric_thickness
     dict_actuator = {
@@ -413,7 +457,7 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------------------------------------------------
     # RUN FUNCTION - SOLVE AND PLOT STRAIN-BY-Z
     # ------------------------------------------------------------------------------------------------------------------
-
+    COMPUTE_DEPTH_DEPENDENT_STRAIN = True  # True False
     if COMPUTE_DEPTH_DEPENDENT_STRAIN:
         # setup
 

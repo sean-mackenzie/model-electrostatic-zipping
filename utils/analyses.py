@@ -71,7 +71,7 @@ def get_surface_profile_dict(dict_settings):
     return dict_surface_profilometry
 
 
-def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_frames=None, animate_rzdr=None, df_zipped=None):
+def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_frames=None, animate_rzdr=None, df_zipped=None, average_max_n=None):
     # assign simple column labels
     # xym = 'g'  # options: 'g': sub-pixel localization using 2D Gaussian; 'm': discrete localization using cross-corr
     px, py, pr, pdx, pdy, pdr, pd0x, pd0y, pd0r = [k + xym for k in ['x', 'y', 'r', 'dx', 'dy', 'dr', 'd0x', 'd0y', 'd0r']]
@@ -115,6 +115,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     if animate_rzdr is not None:
         przdr = animate_rzdr
+    if average_max_n is None:
+        average_max_n = 5
     # -
     if 'smu_test_type' in dict_test.keys():
         if dict_test['smu_test_type'] in [1, 2, '1', '2']:
@@ -136,16 +138,16 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             compare_pull_in_voltage_with_model = True
             plot_depth_dependent_in_plane_stretch = True
             plot_pids_dr_by_dz = True
-            plot_pids_dz_by_voltage_hysteresis = False
-            plot_normalized_membrane_profile, frois_norm_profile = True, [30, 83, 84, 108, 109, 110]
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [30, 83, 84, 108, 109, 110]
+            plot_pids_dz_by_voltage_hysteresis = True
+            plot_normalized_membrane_profile, frois_norm_profile = True, [40, 53, 80, 90, 100]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [40, 53, 80, 90, 100]
         else:
             compare_pull_in_voltage_with_model = False
-            plot_depth_dependent_in_plane_stretch = True
+            plot_depth_dependent_in_plane_stretch = False
             plot_pids_dr_by_dz = False
             plot_pids_dz_by_voltage_hysteresis = False
-            plot_normalized_membrane_profile, frois_norm_profile = False, []
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, []
+            plot_normalized_membrane_profile, frois_norm_profile = False, [20, 35, 45, 103]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = False, [20, 35, 45, 103]
     else:
         # pass
         compare_pull_in_voltage_with_model = False
@@ -162,7 +164,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     # modifiers (True False)
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
-    average_max_n_positions = 15
+    average_max_n_positions = average_max_n
     # -
     plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
     plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)

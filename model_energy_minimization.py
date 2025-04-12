@@ -18,10 +18,12 @@ def solve_energy_iterative_shape_function(config, dict_actuator, dict_material,
                                           save_id='arb', path_save=None):
 
     actuator_shape = dict_actuator['shape']
-    X = dict_actuator['diameter']
-    Z = dict_actuator['depth']
+    # X = dict_actuator['diameter']
+    # Z = dict_actuator['depth']
     profile_x = dict_actuator['profile_x']
     profile_z = dict_actuator['profile_z']
+    X = profile_x.max() * 2
+    Z = profile_z.min()
 
     # --- CHANGES:
     #X = dict_actuator['diameter']  # 0.0015 dict_actuator['diameter'] --> useful only if want to artificially add dia_flat to given profiles

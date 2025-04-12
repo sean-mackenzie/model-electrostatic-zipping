@@ -8,18 +8,63 @@ from scipy.optimize import fsolve
 eps0 = 8.854e-12
 
 # functions: energy
-def mechanical_energy_density_Gent(mu, J, l):
-    return -1 * (mu * J / 2) * np.log(1 - ((2 * l ** 2 + 1 / l ** 4 - 3) / J))
 
 def capacitance_surface_roughness(eps_r, A, d, R0):
     return eps0 * A / R0 * np.log(eps_r * R0 / d + 1)
+
 
 def electrostatic_energy_density_SR(eps_r, A, d, U, R0):
     if R0 == 0:
         R0 = 1e-9
     return -0.5 * U ** 2 * capacitance_surface_roughness(eps_r, A, d, R0)
 
-# --- The following is a reformulation and should be double-checked
+
+def mechanical_energy_density_Gent(mu, J, l):
+    return -1 * (mu * J / 2) * np.log(1 - ((2 * l ** 2 + 1 / l ** 4 - 3) / J))
+
+
+def mechanical_energy_density_NeoHookean(mu, l):
+    """ NEED TO DOUBLE-CHECK: Strain energy in neo-Hookean (incompressible) """
+    I1 = 2 * l**2 + 1 / l**4
+    return 0.5 * mu * (I1 - 3)
+
+def mechanical_energy_density_metal(E, nu, l):
+    """ Strain energy in metal (linear elasticity; plane stress, biaxial strain) """
+    strain_metal = l - 1
+    return (E / (1 - nu)) * strain_metal**2
+
+def bending_energy_per_unit_area_metal(E, nu, t, curvature):
+    """ Probably not useful and/or correct. """
+    # Bending energy in metal (only)
+    D_metal = E * t**3 / (12 * (1 - nu**2))  # Bending stiffness
+    U_bending = D_metal * curvature**2  # per unit area
+    return U_bending
+
+
+
+def calculate_stretched_thickness(original_thickness, stretch_factor):
+    """
+    Calculate the thickness of a membrane after biaxial stretching.
+    NOTE:
+        Type of modulus     Symbol      Describes
+        ------------------------------------------
+    1.  Young's modulus     E           Axial stretching or compression
+    2.  Shear modulus       G or mu     Response to shear (sliding layers)
+    3.  Bulk modulus        K           Resistance to uniform compression (volume change)
+    4.  Biaxial modulus     E/(1-mu^2)  In-plane stretching of membrane under plane stress
+
+    Parameters:
+        original_thickness (float): The original thickness of the membrane in microns (or any unit).
+        stretch_factor (float): The biaxial stretch factor (e.g., 1.2 for 20% stretching).
+
+    Returns:
+        float: The thickness of the stretched membrane in the same unit as original_thickness.
+    """
+    # Apply the area conservation assumption
+    stretched_thickness = original_thickness / (stretch_factor ** 2)
+
+    return stretched_thickness
+
 
 # Define the Gent model stress function for equi-biaxial stretch
 def gent_stress_from_pre_stretch(pre_stretch, mu, Jm):

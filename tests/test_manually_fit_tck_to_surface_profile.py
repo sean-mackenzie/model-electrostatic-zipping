@@ -61,7 +61,7 @@ def plot_surface_profile_2nd_derivative(x, y, path_save, smoothing=100):
         plt.show()
 
 
-def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3, path_save=None):
+def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3, path_save=None, show_plots=True,):
 
     # create figure and plot at each step
     fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True, figsize=(10, 10))
@@ -100,9 +100,10 @@ def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3,
     if path_save is not None:
         plt.savefig(join(path_save, 'manually_fit_tck_to_surface_profile.png'), dpi=300,
                     facecolor='w', bbox_inches='tight')
-    plt.show()
-
-    plot_surface_profile_2nd_derivative(x=rx, y=ry, path_save=path_save, smoothing=1000)
+    if show_plots:
+        plt.show()
+        plot_surface_profile_2nd_derivative(x=rx, y=ry, path_save=path_save, smoothing=1000)
+    plt.close()
 
     return tck, rx.min(), rx.max()
 

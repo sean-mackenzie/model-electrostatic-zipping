@@ -142,6 +142,8 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
     """
 
     # 0th-pass: estimate r, z as average of particles nearest the center
+    """ NOTE: if np.percentile() gives an IndexError, the this frame may have no data.
+    This happened for 02242025_W13-D1-C17-20pT: TID24 Frame 54"""
     zipping_interface_r = np.percentile(r, 7.5)
     zipping_interface_z = np.mean(z[r < zipping_interface_r])
 

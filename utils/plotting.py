@@ -1764,24 +1764,12 @@ def plot_net_d0zr_all_pids_by_volt_freq_errorbars_per_tid(df, path_save, thresho
     plt.close(fig)
 
 
-def plot_net_d0zr_frequency_sweeps_per_pid(df, combinations, only_pids, threshold_pids_by_d0z, path_save, poly_deg=2):
+def plot_net_d0zr_frequency_sweeps_per_pid(df, combinations, only_pids, threshold_pids_by_d0z, path_save, poly_deg=None):
     px, py1, py2 = 'awg_freq', 'dz_mean', 'dr_mean'
 
     if only_pids is None:
         only_pids = df[df[py1] < threshold_pids_by_d0z]['id'].unique()
     df = df[df['id'].isin(only_pids)]
-    if poly_deg == 1:
-        poly_eq = '{}x+{}'
-    elif poly_deg == 2:
-        poly_eq = '{}x^2+{}x+{}'
-    elif poly_deg == 3:
-        poly_eq = '{}x^3+{}x^2+{}x+{}'
-    elif poly_deg == 4:
-        poly_eq = '{}x^4+{}x^3+{}x^2+{}x+{}'
-    elif poly_deg == 5:
-        poly_eq = '{}x^5+{}x^4+{}x^3+{}x^2+{}x+{}'
-    else:
-        raise ValueError('poly_deg must be 1, 2, 3, 4, or 5')
 
     for result in combinations:
         # get independent variable
@@ -1817,6 +1805,21 @@ def plot_net_d0zr_frequency_sweeps_per_pid(df, combinations, only_pids, threshol
         # get independent variable
         col_label = result['remaining_column']
         ncols = int(np.ceil(len(tids) / 16))
+
+        if poly_deg is None:
+            poly_deg = np.min([len(df_tid[px].unique()) - 1, 5])
+        if poly_deg == 1:
+            poly_eq = '{}x+{}'
+        elif poly_deg == 2:
+            poly_eq = '{}x^2+{}x+{}'
+        elif poly_deg == 3:
+            poly_eq = '{}x^3+{}x^2+{}x+{}'
+        elif poly_deg == 4:
+            poly_eq = '{}x^4+{}x^3+{}x^2+{}x+{}'
+        elif poly_deg == 5:
+            poly_eq = '{}x^5+{}x^4+{}x^3+{}x^2+{}x+{}'
+        else:
+            raise ValueError('poly_deg must be 1, 2, 3, 4, or 5')
 
         # iterate and plot
         for pid in only_pids:

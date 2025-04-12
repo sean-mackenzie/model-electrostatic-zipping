@@ -215,17 +215,18 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02242025_W13-D1_C15-15pT_iter2'
+    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
 
     # Model params
-    VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 250  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
-    ONLY_PIDS = None  # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -160  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
+    THRESHOLD_PIDS_BY_D0Z = -165  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
-    read_model_data = True
+    FREQ_SWEEP_POLY_DEG = 2  # If None, then polynominal degree will be one less than number of frequencies
+    read_model_data = False
 
     ALL_TRUE = False  # True False
     if ALL_TRUE:
@@ -249,19 +250,19 @@ if __name__ == "__main__":
         make_ivac_matrix = False
         make_ivac_matrix_combinations = False
         make_merged_coords_volt = False
-        make_zipped_coords = True
+        make_zipped_coords = False
         make_net_d0zr_per_pid = False
         join_net_d0zr_and_iv_matrix = False
         # plot modifiers
         plot_all_pids_net_d0zr_per_pid_by_tid = False
         plot_heatmap_of_all_pids_net_d0zr = False
         plot_per_pid_net_d0zr_per_pid_by_tid = False
-        plot_net_d0zr_frequency_sweeps_per_pid = False
+        plot_net_d0zr_frequency_sweeps_per_pid = True
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
         plot_merged_coords_volt_per_pid_by_all_volt_freq = False
         plot_merged_coords_volt_heat_maps = False
         plot_merged_coords_volt_ascending_only = False
-        plot_zipped_coords_on_model = True
+        plot_zipped_coords_on_model = False
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -406,7 +407,7 @@ if __name__ == "__main__":
                     only_pids=ONLY_PIDS,  # None: defer to dz quantile threshold
                     threshold_pids_by_d0z=THRESHOLD_PIDS_BY_D0Z,
                     path_save=SAVE_SUB_ANALYSIS,
-                    poly_deg=2,
+                    poly_deg=FREQ_SWEEP_POLY_DEG,
                 )
 
         # ---

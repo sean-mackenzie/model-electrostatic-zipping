@@ -8,43 +8,27 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     SAVE_ID = 'C2-0pT'
-    PATH_SAVE = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Methods/Keithley 2410 4-Wire'
+    PATH_SAVE = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper'
     MATS = ['5/15nm Ti/Au', '5/25nm Ti/Au', '5/35nm Ti/Au']
-    THICKNESSES = np.array([15, 25, 35])
-    RES = np.array([5.4852, 3.4464, 1.4185])
+    THICKNESSES = np.linspace(0, 40)
 
-    def fit_line(x, a, b):
-        return a * x + b
+    def func_Osmani_2016(x, a, b, c):
+        return a + b * x + c * x**2
 
-    popt, pcov = curve_fit(fit_line, THICKNESSES, RES)
+    E = func_Osmani_2016(THICKNESSES, 1.1, 0.09, 0.01)
+    E_lower = func_Osmani_2016(THICKNESSES, 1.2, 0.11, 0.011)
+    E_upper = func_Osmani_2016(THICKNESSES, 1.0, 0.07, 0.009)
 
-    fig, ax = plt.subplots(figsize=(3.5 * 1.25, 2.75 * 1.25))
+    fig, ax = plt.subplots(figsize=(4.5, 3.75))
 
-    # ax.plot(THICKNESSES, fit_line(THICKNESSES, *popt), 'k-', label='Fit: {}x + {}'.format(round(popt[0], 2), round(popt[1], 2)))
-    # ax.plot(THICKNESSES, RES, 'ro', label=SAVE_ID)
-    ax.scatter(THICKNESSES[0] + 5, RES[0], label='C2-0pT 5/15nm Ti/Au')
-    ax.scatter(THICKNESSES[1] + 5, RES[1], label='C2-0pT 5/25nm Ti/Au')
-    ax.scatter(THICKNESSES[2] + 5, RES[2], label='C2-0pT 5/35nm Ti/Au')
-    ax.scatter(45 + 5, 20, label='C1-20pT 5/45nm Ti/Au')
+    ax.plot(THICKNESSES, E, '-', color='tab:red', lw=1.25, label='ELASTOSIL: ' + r'$1.1\pm 0.1$ MPa')
+    ax.fill_between(THICKNESSES, E_lower, E_upper, color='red', ec='none', alpha=0.2)
 
-    ax.scatter(20, 69, marker='^', label='C7-20pT: MPTMS + 20nm Au')
-    ax.scatter(20, 102, marker='^', label='C9-0pT: MPTMS + 20nm Au')
-
-    ax.scatter(25, 215, marker='D', label='C10-20pT: MPTMS + 25nm Au')
-
-    ax.scatter(25, 180, marker='s', label='C13-20pT: MPTMS + 25nm Au')
-    ax.scatter(20, 173, marker='s', label='C14-15pT: MPTMS + 20nm Au')
-    ax.scatter(25, 162, marker='s', label='C15-15pT: MPTMS + 25nm Au')
-
-
-    ax.scatter(25, 30, marker='x', label='C17-20pT: MPTMS + 25nm Au')
-    ax.scatter(30, 290, marker='x', label='C21-15pT: MPTMS + 30nm Au')
-
-    ax.set_xlabel('Electrode Thickness (nm)')
-    ax.set_ylabel('Resistance (Ohms)')
-    ax.legend(fontsize='x-small', title='Grouped by Date')
+    ax.set_xlabel('Au Thickness (nm)')
+    ax.set_ylabel('Elastic modulus E (MPa)')
+    ax.legend(title='Au-on-Elastomer')  # fontsize='x-small'
     ax.grid(alpha=0.25)
     # ax.set_title('4-wire Resistance vs. Thickness')
     plt.tight_layout()
-    plt.savefig(join(PATH_SAVE, '_Compare-membrane-resistance_all-sub1kOhm.png'), dpi=300, facecolor='w', bbox_inches='tight')
+    plt.savefig(join(PATH_SAVE, 'extend_Osmani_et_al_2016.png'), dpi=300, facecolor='w', bbox_inches='tight')
     plt.show()

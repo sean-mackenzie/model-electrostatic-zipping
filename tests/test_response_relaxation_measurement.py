@@ -885,8 +885,8 @@ def plot_displacement_with_edges_iter2(df, results, path_save=None):
 if __name__ == "__main__":
 
     BASE_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_ID = '01272025_W5-D1_C7-20pT'
-    TID = 3
+    TEST_ID = '03122025_W13-D1_C15-15pT_25nmAu'
+    TID = 27
 
     SAVE_DIR = join(BASE_DIR, TEST_ID, 'analyses/custom/response-and-relaxation/tid{}'.format(TID))
     if not os.path.exists(SAVE_DIR):
@@ -896,7 +896,7 @@ if __name__ == "__main__":
     DF = pd.read_excel(FP_READ)
 
     # --- plot displacement trajectories
-    ONLY_PIDS = [19, 18, 4]  # if None, then plot all pids
+    ONLY_PIDS = [10, 20, 17, 12, 22, 27]  # if None, then plot all pids
     DF = DF[DF['id'].isin(ONLY_PIDS)]
 
     for PID in ONLY_PIDS:
