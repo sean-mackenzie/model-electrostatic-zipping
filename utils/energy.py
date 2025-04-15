@@ -33,6 +33,11 @@ def mechanical_energy_density_metal(E, nu, l):
     strain_metal = l - 1
     return (E / (1 - nu)) * strain_metal**2
 
+def mechanical_energy_density_metal_3D(E, nu, l):
+    """ Strain energy in metal (linear elasticity; plane strain) """
+    strain_metal = l - 1
+    return 0.5 * (E / (1 - nu**2)) * strain_metal**2
+
 def bending_energy_per_unit_area_metal(E, nu, t, curvature):
     """ Probably not useful and/or correct. """
     # Bending energy in metal (only)

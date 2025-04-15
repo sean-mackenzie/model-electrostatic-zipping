@@ -91,7 +91,7 @@ def compute_bending_energy_full_curvature(r, z, E, nu, t):
 if __name__ == '__main__':
     # Example usage with synthetic dome profile
     R = 1.585e-3  # radius in meters
-    DZ = 100e-6  # Peak deflection of synthetic dome profile
+    DZ = 10e-6  # Peak deflection of synthetic dome profile
 
     # ---
 
@@ -101,8 +101,8 @@ if __name__ == '__main__':
     nu_gold = 0.44
     t_gold = 20e-9      # meters
     # Elastomer
-    E_elastomer = 1.1e6  # 1 MPa
-    nu_elastomer = 0.49
+    E_elastomer = 10.1e6  # 1 MPa
+    nu_elastomer = 0.499
     t_elastomer = 20e-6  # 20 microns
 
     # ---

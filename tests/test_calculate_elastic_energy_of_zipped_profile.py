@@ -16,269 +16,7 @@ from utils import energy, empirical, settings
 from utils.empirical import dict_from_tck
 from tests.test_manually_fit_tck_to_surface_profile import manually_fit_tck
 
-
-def calculate_elastic_energy_of_zipped_profile2(config, dict_actuator, dict_material,
-                                               U_is, append_dfs=False, export_excel=False,
-                                               save_id='arb', path_save=None):
-    # Placeholders from old solver
-    L_i, L_i_eff0 = 0, 0
-
-    # --- Profile
-    actuator_shape = dict_actuator['shape']
-    profile_x = dict_actuator['profile_x']
-    profile_z = dict_actuator['profile_z']
-    X = profile_x.max() * 2
-    Z = profile_z.min()
-
-    print("Original X (dict_actuator['diameter']): {}".format(dict_actuator['diameter']))
-    print("New X (profile_x.max() * 2): {}".format(X))
-    print("Original Z (dict_actuator['depth']): {}".format(dict_actuator['depth']))
-    print("New Z (profile_z.max() * 2): {}".format(Z))
-
-    # --- Membrane
-    t0 = dict_actuator['membrane_thickness']  # original membrane thickness
-    pre_stretch = dict_actuator['pre_stretch']
-    J = dict_material['Jm']
-    if 'E' in dict_material.keys():
-        mu = dict_material['E'] / 3
-    elif 'mu' in dict_material.keys():
-        mu = dict_material['mu']
-    else:
-        raise ValueError("Must provide either 'E' (Youngs modulus) or 'mu' (shear modulus).")
-    # -
-
-    # --- SOLVER
-
-    root_init_deflection = 0
-
-    U_firsts = []
-    root_firsts = []
-    dfs = []
-
-    # Electrical Terms
-    eps_r_memb = dict_material['eps_r_memb']
-    t_diel = dict_actuator['dielectric_thickness']
-    eps_r_diel = dict_material['eps_r_diel']
-    surface_roughness = dict_material['surface_roughness_diel']
-    U_i = 0
-    " BEGIN VOLTAGE LOOP HERE "
-    # for U_i in U_is:
-
-    dL_i = 0  # dL_i: current total length (hypotenuse) of zipped segments
-    dX_i = 0  # dX_i: current x-direction length of zipped segments
-    dZ_i = 0  # dZ_i (z_i): current z-direction length of zipped segments
-
-    x_i = X  # (X_i) moving width of flat membrane
-    t_i = calculate_stretched_thickness(original_thickness=t0, stretch_factor=pre_stretch)  # moving membrane thickness
-    stretch_i = pre_stretch  # moving stretch in flat membrane
-    Vol_i = surface_area(l=x_i, shape=actuator_shape) * t_i  # moving volume of flat membrane
-
-    SA_sum_i = 0  # moving summation of zipped surface area
-    Em_seg_sum_i = 0  # moving summation of mechanical energy over all zipped segments
-    Es_seg_sum_i = 0  # moving summation of electrostatic energy over all zipped segments
-
-    res = []
-    for i in np.arange(1, len(profile_x)):
-        # --- CALCULATE VALUES FOR ZIPPED SEGMENT OF MEMBRANE
-        # 1. evaluate moving positions
-        dX = profile_x[i] - profile_x[i - 1]
-        dZ = (profile_z[i] - profile_z[i - 1]) * -1
-        dL = np.sqrt(dX ** 2 + dZ ** 2)
-        dX_i += dX  # dX_i: current x-direction length of zipped segments
-        dZ_i += dZ  # dZ_i (z_i): current z-direcetion length of zipped segments
-        dL_i += dL  # dL_i: current total length (hypotenuse) of zipped segments
-        # ---
-        # 2. evaluate current zipped segment
-        perimeter_i = perimeter(l=x_i - dX / 2, shape=actuator_shape)
-        surface_area_i = dL * perimeter_i
-        vol_i = surface_area_i * t_i
-        SA_sum_i += surface_area_i
-        # 3. --- energy stored in zipped segment
-        # mechanical energy stored in differential zipped segment
-        Em_seg_i = vol_i * mechanical_energy_density_Gent(mu=mu, J=J, l=stretch_i)
-        # electrostatic energy stored in differential zipped segment
-        Es_seg_i = handler_electrostatic_energy_density(config,
-                                                        eps_r_diel=eps_r_diel, eps_r_memb=eps_r_memb,
-                                                        A=surface_area_i,
-                                                        t_diel=t_diel, t_memb=t_i,
-                                                        U=U_i, R0=surface_roughness)
-        # 4. data formulating the zipped segment
-        res_zip_i = [i, dL_i, dX_i, dZ_i, L_i, x_i, t_i, stretch_i,
-                     perimeter_i, surface_area_i, vol_i,
-                     Em_seg_i, Es_seg_i]
-        # ---
-
-        # --- CALCULATE THE NEW VALUES FOR SUSPENDED MEMBRANE
-        # 1. evaluate moving positions (None)
-        # ---
-        # 2. evaluate new flat membrane
-        x_i = x_i - 2 * dX  # new diameter of suspended membrane
-        Vol_i = Vol_i - vol_i  # new volume of suspended membrane
-        t_i = Vol_i / surface_area(l=x_i, shape=actuator_shape)  # new thickness of suspended membrane
-        stretch_i = np.sqrt(t0 / t_i)  # new stretch of suspended membrane
-        # ---
-        # 3. energy stored in flat membrane
-        # mechanical energy of flat membrane
-        Em_flat_i = Vol_i * mechanical_energy_density_Gent(mu=mu, J=J, l=stretch_i)
-        # 4. data formulating the flat membrane
-        res_flat_i = [L_i_eff0, L_i, x_i, t_i, stretch_i, Vol_i, Em_flat_i, ]
-        # ---
-
-        # --- SUM VALUES FOR ZIPPED + FLAT SEGMENTS
-        # Total energy stored in flat + zipped segments
-        # Total mechanical
-        Em_seg_sum_i += Em_seg_i  # total mechanical in zipped segments
-        Em_tot_i = Em_seg_sum_i + Em_flat_i
-        # Total Electrical
-        Es_seg_sum_i += Es_seg_i  # total electrical in zipped segments
-        # Total energy
-        E_tot_i = Em_tot_i + Es_seg_sum_i
-        # Data formulating the total energies of the system
-        res_e_i = [Em_seg_sum_i, Em_tot_i, Es_seg_sum_i, E_tot_i]
-
-        # ---
-        # Add all results and append to list
-        res_i = res_zip_i + res_flat_i + res_e_i
-        res.append(res_i)
-
-    # dataframe
-    columns_zip = ['step',
-                   'dL', 'dX', 'dZ',
-                   'L_i', 'x_i', 't_i', 'stretch_i',
-                   'perimeter_i', 'sa_i', 'vol_i',
-                   'Em_seg_i', 'Es_seg_i',
-                   ]
-    columns_flat = ['L0_f', 'L_f', 'x_f', 't_f', 'stretch_f', 'vol_f', 'Em_flat_i']
-    columns_energy = ['Em_seg_sum_i', 'Em_tot_i', 'Es_seg_sum_i', 'E_tot_i']
-    columns = columns_zip + columns_flat + columns_energy
-
-    df = pd.DataFrame(np.array(res),
-                      columns=columns)
-
-    if export_excel == True:
-        print("Exporting")
-        df.to_excel(join(path_save, '{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i)))
-    elif isinstance(export_excel, (int, float)):
-        if U_i == export_excel:
-            df.to_excel(join(path_save, '{}_{}_{}_U={}V.xlsx'.format(save_id, config, actuator_shape, U_i)))
-
-    # ---
-
-    # --- find first minima of total energy
-    pxn = df.dZ.to_numpy()[1:-1]
-    py3n = df.E_tot_i.diff().to_numpy()[1:-1]
-    pf12 = np.poly1d(np.polyfit(pxn, py3n, 12))
-    # pfy = pf12(pxn)
-
-    pxnew = df.dZ.to_numpy()
-    pynew = df.E_tot_i.to_numpy()
-    # pfnew = np.poly1d(np.polyfit(pxnew, pynew, 12))
-    c, stats = P.polyfit(pxnew, pynew, 12, full=True)
-
-    # spl = make_splrep(pxnew, pynew, k=4)
-    # spl_derivative = spl.derivative(nu=1)
-    do_scipy = False
-    if do_scipy:
-        save_fig_dir_ = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation/01102025_W13-D1_C9-0pT/analyses/modeling/25dV'
-        s = 0.0
-        save_fig_dir = join(save_fig_dir_, 's={}'.format(s))
-        if not os.path.exists(save_fig_dir):
-            os.makedirs(save_fig_dir)
-        spl = splrep(pxnew, pynew, s=s, k=4)
-        dspl = splder(spl)
-        zeros = sproot(dspl)
-        zeros = zeros[np.imag(zeros) == 0]
-        # zeros = zeros[(zeros > df.dZ.min()) & (zeros < df.dZ.max())]
-        zeros = zeros[(zeros > df.dZ.min() + 1e-6) & (zeros < df.dZ.max() - 2e-6)]
-        zeros.sort()
-        try:
-            root_first = zeros[0]
-            root_firsts_scipy.append(root_first)
-            raise_error = False
-        except IndexError:
-            root_first = -1e-6
-            raise_error = True
-
-        # tck = splrep(x, y, s=smoothing, k=degree)
-        # x2 = np.linspace(x.min(), x.max(), num_points)
-        scipy2 = BSpline(*spl)(pxnew)
-        dpxnew = pxnew[2:-25]
-        dscipy2 = BSpline(*dspl)(dpxnew)
-
-        fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True)
-
-        ax1.plot(df.dZ * 1e6, df.E_tot_i, 'k-', label='data')
-        ax1.plot(pxnew * 1e6, scipy2, 'r--', label='scipy fit')
-        ax1.legend()
-
-        ax2.plot(pxn * 1e6, py3n, 'k-', label='diff(data)')
-        ax2.plot(pxn * 1e6, pf12(pxn), 'g--', label='polyfit(12)')
-        ax2.axhline(0, color='gray', linestyle='--', lw=0.5)
-        ax2.legend()
-
-        ax3.plot(dpxnew * 1e6, dscipy2, 'r--', label='dscipy: 0={}'.format(np.round(root_first * 1e6, 2)))
-        ax3.axhline(0, color='gray', linestyle='--', lw=0.5)
-        ax3.legend()
-
-        plt.tight_layout()
-        plt.savefig(join(save_fig_dir, '{}V.png'.format(U_i)))
-        plt.close()
-        if raise_error:
-            raise ValueError("No roots found for {} V".format(U_i))
-        j = 1
-    else:
-        pass  # root_firsts_scipy.append(0)
-
-    try:
-        roots = np.roots(pf12)
-    except np.linalg.LinAlgError:
-        # import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(pxn, py3n, 'k-')
-        ax.plot(pxn, pf12(pxn), 'r--')
-        ax.set_title(U_i)
-        plt.show()
-        plt.close()
-        raise ValueError()
-
-    try:
-        roots = np.roots(pf12)
-        roots = roots[np.imag(roots) == 0]
-        roots = np.real(roots)
-        roots = roots[(roots > df.dZ.min()) & (roots < df.dZ.max())]
-        roots.sort()
-        root_first = roots[0]
-
-        U_firsts.append(U_i)
-        root_firsts.append(root_first)
-
-        root_init_deflection = 1
-
-    except IndexError:
-        if root_init_deflection == 0:
-            nan_root = 0
-        elif root_init_deflection == 1:
-            nan_root = Z
-
-        U_firsts.append(U_i)
-        root_firsts.append(nan_root)
-
-    # ---
-
-    if append_dfs:
-        dfs.append(df)
-    else:
-        del df
-
-    # package into dataframe and export
-    df_roots = pd.DataFrame(np.vstack([U_firsts, root_firsts]).T, columns=['U', 'z'])
-    # df.to_excel('z_by_U__t={}um.xlsx'.format(int(np.round(t*1e6))))
-
-    if append_dfs:
-        return dfs, df_roots
-    else:
-        return df_roots
-
+# Helper functions
 
 def handler_electrostatic_energy_density(config, eps_r_diel, eps_r_memb, A, t_diel, t_memb, U, R0):
     """
@@ -318,6 +56,190 @@ def handler_electrostatic_energy_density(config, eps_r_diel, eps_r_memb, A, t_di
     return Es_seg_i
 
 
+# ---
+
+# Functions
+
+def calculate_zipped_segment_volumes_by_depth(dict_geometry):
+    a = 1
+    """
+            I JUST REALIZED!....
+
+            Here's the best way to do this:
+                1. Run a script that calculates the geometry at every dZ        (length ~ 2000)
+                    * (i.e., the volume of the zipped and flat segments for each dZ)
+                    ** THIS EFFECTIVELY FORMS A ***FUNCTION*** 
+                        The inputs it takes are 
+                            (1) functions for energy density of segments
+                            (2) the voltage
+
+                    *** So, you only need to export this spreadsheet ONCE! (and it serves for all variations!!!)
+
+                2. Run a script that calculates the energy density of the zipped segments
+                    * Effectively apply energy density functions to each volume in ^spreadsheet
+                    * You don't need to save anything. You can just "store it in memory" b/c ^spreadsheet is a function
+                    * Though, it may be useful to save all the data (energy as a function of U and dZ)
+
+                3. Run a handler function that does #2 for (1) bilayer membrane and (2) separate silicone + metal
+                    * MOST IMPORTANTLY, we want to plot the (1) and (2) on the same plot
+                        *** Hopefully, this will reveal something about how/why/what works and what doesn't
+                        or what is "appropriate" and what is not... Ideally, they should be the same, right?
+
+    """
+    # --- --- Constants
+    # --- Surface Profile
+    actuator_shape = dict_geometry['shape']
+    profile_x = dict_geometry['profile_x']
+    profile_z = dict_geometry['profile_z']
+    X = profile_x.max() * 2
+    # --- Membrane
+    t = dict_geometry['membrane_thickness']
+    pre_stretch = dict_geometry['membrane_pre_stretch']
+    t0 = t * pre_stretch ** 2
+    # Metal
+    t_metal = dict_geometry['metal_thickness']  # meters
+
+    # ---
+
+    # --- SOLVER
+
+    dL_i = 0  # dL_i: current total length (hypotenuse) of zipped segments
+    dX_i = 0  # dX_i: current x-direction length of zipped segments
+    dZ_i = 0  # dZ_i (z_i): current z-direction length of zipped segments
+
+    x_i = X  # (X_i) moving width of surface profile (effectively, diameter)
+    t_i = t  # moving membrane thickness
+    Vol_i = surface_area(l=x_i, shape=actuator_shape) * t_i  # moving volume of flat membrane
+    stretch_i = pre_stretch  # moving stretch in flat membrane
+    Vol_i_metal = surface_area(l=x_i, shape=actuator_shape) * t_metal  # moving volume of flat metal film
+    stretch_i_metal = 1.0  # moving pre-stretch of the metal film
+
+    res = []
+    for i in np.arange(1, len(profile_x)):
+        # --- CALCULATE VALUES FOR ZIPPED SEGMENT OF MEMBRANE
+        # 1. evaluate moving positions
+        dX = profile_x[i] - profile_x[i - 1]
+        dZ = (profile_z[i] - profile_z[i - 1]) * -1
+        dL = np.sqrt(dX ** 2 + dZ ** 2)
+        dX_i += dX  # dX_i: current x-direction length of zipped segments
+        dZ_i += dZ  # dZ_i (z_i): current z-direction length of zipped segments
+        dL_i += dL  # dL_i: current total length (hypotenuse) of zipped segments
+        # ---
+        # 2. evaluate current zipped segment
+        perimeter_i = perimeter(l=x_i - dX / 2, shape=actuator_shape)   # circumference of profile at this position
+        surface_area_i = dL * perimeter_i                               # surface area of zipped segment
+        vol_i = surface_area_i * t_i                                    # volume of zipped segment
+        vol_i_metal = surface_area_i * t_metal                          # volume of zipped metal segment
+
+        # Data formulating the zipped segment
+        res_zip_i = [i, dL_i, dX_i, dZ_i, x_i, perimeter_i, surface_area_i, # purely geometric
+                     t_i, vol_i, stretch_i,  # geometry of this zipped membrane segment
+                     t_metal, vol_i_metal, stretch_i_metal,  # geometry of this zipped metal segment
+                     ]
+        # ---
+        # --- CALCULATE THE NEW VALUES FOR SUSPENDED MEMBRANE
+        # 2. evaluate new flat membrane
+        # geometry
+        x_i = x_i - 2 * dX  # new width of surface profile
+        surface_area_f = surface_area(l=x_i, shape=actuator_shape)
+        Vol_i = Vol_i - vol_i  # new volume of suspended membrane
+        if Vol_i < 0:
+            continue
+        t_i = Vol_i / surface_area_f  # new thickness of suspended membrane
+        stretch_i = np.sqrt(t0 / t_i)  # new stretch of suspended membrane
+        # metal
+        Vol_i_metal = Vol_i_metal - vol_i_metal  # new volume of metal film on suspended membrane
+        t_metal = t_metal  # placeholder
+        stretch_i_metal = stretch_i - pre_stretch + 1  # stretch in metal film only is difference in stretch
+        # Data formulating the flat membrane
+        res_flat_i = [x_i, surface_area_f, t_i, Vol_i, stretch_i, t_metal, Vol_i_metal, stretch_i_metal]
+        # ---
+        # Add all results and append to list
+        res_i = res_zip_i + res_flat_i
+        res.append(res_i)
+
+    # dataframe
+    columns_zip = ['step',
+                   'dL', 'dX', 'dZ', 'x_i', 'perimeter_i', 'sa_i',
+                   't_i', 'vol_i', 'stretch_i',
+                   't_i_metal', 'vol_i_metal', 'stretch_i_metal',
+                   ]
+    columns_flat = ['x_flat', 'sa_flat',
+                    't_flat', 'vol_flat', 'stretch_flat',
+                    't_flat_metal', 'vol_flat_metal', 'stretch_flat_metal']
+    columns = columns_zip + columns_flat
+    df = pd.DataFrame(np.vstack(res), columns=columns)
+
+    return df
+
+
+def calculate_elastic_energy_by_depth(df, dict_mechanical):
+    memb_E = dict_mechanical['memb_E']
+    memb_J = dict_mechanical['memb_E']
+    met_E = dict_mechanical['memb_E']
+    met_nu = dict_mechanical['memb_E']
+    comp_E = dict_mechanical['memb_E']
+
+    # --- Elastic energy
+
+    # Elastic energy of zipped segment at each dZ
+    # Membrane (E = 1.2 MPa)
+    df['Em_seg_i_memb'] = df['vol_i'] * mechanical_energy_density_Gent(mu=memb_E / 3, J=memb_J, l=df['stretch_i'])
+    # Metal (Young's modulus derived from composite bulge test)
+    df['Em_seg_i_metal'] = df['vol_i_metal'] * mechanical_energy_density_metal(E=met_E, nu=met_nu,
+                                                                               l=df['stretch_i_metal'])
+    # Total energy of membrane + metal
+    df['Em_seg_i_mm'] = df['Em_seg_i_memb'] + df['Em_seg_i_metal']
+    # Composite membrane bilayer (Young's modulus from bulge test)
+    df['Em_seg_i_comp'] = df['vol_i'] * mechanical_energy_density_Gent(mu=comp_E / 3, J=memb_J, l=df['stretch_i'])
+
+    # Total elastic energy of all zipped segments as a function of dZ (sum: 0 to dZ)
+    df['Em_seg_sum_i_memb'] = df['Em_seg_i_memb'].rolling(1).sum()
+    df['Em_seg_sum_i_metal'] = df['Em_seg_i_metal'].rolling(1).sum()
+    df['Em_seg_sum_i_mm'] = df['Em_seg_i_mm'].rolling(1).sum()
+    df['Em_seg_sum_i_comp'] = df['Em_seg_i_comp'].rolling(1).sum()
+
+    # Elastic energy of flat membrane at each dZ
+    df['Em_flat_i_memb'] = df['vol_flat'] * mechanical_energy_density_Gent(mu=memb_E / 3, J=memb_J, l=df['stretch_flat'])
+    df['Em_flat_i_metal'] = df['vol_flat_metal'] * mechanical_energy_density_metal(E=met_E, nu=met_nu,
+                                                                                l=df['stretch_flat_metal'])
+    df['Em_flat_i_mm'] = df['Em_flat_i_memb'] + df['Em_flat_i_metal']
+    df['Em_flat_i_comp'] = df['vol_flat'] * mechanical_energy_density_Gent(mu=comp_E / 3, J=memb_J, l=df['stretch_flat'])
+
+    # Total elastic energy of zipped + flat membrane at each dZ
+    df['Em_tot_i_memb'] = df['Em_seg_sum_i_memb'] + df['Em_flat_i_memb']
+    df['Em_tot_i_metal'] = df['Em_seg_sum_i_metal'] + df['Em_flat_i_metal']
+    df['Em_tot_i_mm'] = df['Em_seg_sum_i_mm'] + df['Em_flat_i_mm']
+    df['Em_tot_i_comp'] = df['Em_seg_sum_i_comp'] + df['Em_flat_i_comp']
+
+    return df
+
+
+def calculate_electrostatic_energy_by_depth_for_voltage(df, dict_electrostatic):
+
+    sd_eps_r = dict_electrostatic['sd_eps_r']
+    sd_t = dict_electrostatic['sd_t']
+    sd_sr = dict_electrostatic['sd_sr']
+    voltage = dict_electrostatic['voltage']
+
+    # Electrostatic energy of zipped segment at each dZ
+    df['Es_seg_i'] = electrostatic_energy_density_SR(eps_r=sd_eps_r, A=df['sa_i'], d=sd_t, U=voltage, R0=sd_sr)
+    # Total electrostatic energy of all zipped segments as a function of dZ (sum: 0 to dZ)
+    df['Es_seg_sum_i'] = df['Es_seg_i'].rolling(1).sum()
+
+    return df
+
+def calculate_total_energy_by_depth(df):
+    # Total energy of system
+    df['E_tot_i_memb'] = df['Em_tot_i_memb'] + df['Es_seg_sum_i']
+    df['E_tot_i_mm'] = df['Em_tot_i_mm'] + df['Es_seg_sum_i']
+    df['E_tot_i_comp'] = df['Em_tot_i_comp'] + df['Es_seg_sum_i']
+
+    return df
+
+
+# --- OLD(er)
+
 def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_material, U_is, dict_metal=None):
     a = 1
     """
@@ -344,57 +266,42 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
                         or what is "appropriate" and what is not... Ideally, they should be the same, right?
                 
     """
-
-    # --- Profile
+    # --- --- Constants
+    # --- Surface Profile
     actuator_shape = dict_actuator['shape']
     profile_x = dict_actuator['profile_x']
     profile_z = dict_actuator['profile_z']
-    X = profile_x.max() * 2
-    Z = profile_z.min()
-
-    print("Original X (dict_actuator['diameter']): {}".format(dict_actuator['diameter']))
-    print("New X (profile_x.max() * 2): {}".format(X))
-    print("Original Z (dict_actuator['depth']): {}".format(dict_actuator['depth']))
-    print("New Z (profile_z.max() * 2): {}".format(Z))
-
-    # --- Membrane
-    t0 = dict_actuator['membrane_thickness']  # original membrane thickness
-    pre_stretch = dict_actuator['pre_stretch']
-    J = dict_material['Jm']
-    if 'E' in dict_material.keys():
-        mu = dict_material['E'] / 3
-    elif 'mu' in dict_material.keys():
-        mu = dict_material['mu']
-    else:
-        raise ValueError("Must provide either 'E' (Youngs modulus) or 'mu' (shear modulus).")
-    # -
-    # Placeholder from old solver
-    L_i_eff0 = 0
-
-    # Material properties of metal film
-    if dict_metal is None:
-        include_metal = False
-    else:
-        E_metal = dict_metal['E']  # Pa
-        nu_metal = dict_metal['poissons_ratio']
-        t_metal = dict_metal['thickness']  # meters
-        include_metal = dict_metal['include_metal']
-
-    # --- SOLVER
-
-    root_init_deflection = 0
-
-    U_firsts = []
-    root_firsts = []
-    dfs = []
-
-
-    # Electrical Terms
+    # --- Electrical properties
     eps_r_memb = dict_material['eps_r_memb']
     t_diel = dict_actuator['dielectric_thickness']
     eps_r_diel = dict_material['eps_r_diel']
     surface_roughness = dict_material['surface_roughness_diel']
-    " BEGIN VOLTAGE LOOP HERE "
+    # --- Membrane
+    t = dict_actuator['membrane_thickness']
+    pre_stretch = dict_actuator['pre_stretch']
+    J = dict_material['Jm']
+    mu = dict_material['E'] / 3
+    # --- Metal film
+    E_metal = dict_metal['E']  # Pa
+    nu_metal = dict_metal['poissons_ratio']
+    t_metal = dict_metal['thickness']  # meters
+    include_metal = dict_metal['include_metal']
+
+
+    # ---
+
+    # Initialize (static variables)
+    X = profile_x.max() * 2
+    Z = profile_z.min()
+    # Placeholder from old solver
+    L_i_eff0 = 0
+
+    # --- SOLVER
+
+    root_init_deflection = 0
+    U_firsts = []
+    root_firsts = []
+    dfs = []
     U_res = []
     for U_i in U_is:
 
@@ -403,7 +310,7 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
         dZ_i = 0  # dZ_i (z_i): current z-direction length of zipped segments
 
         x_i = X  # (X_i) moving width of surface profile (effectively, diameter)
-        t_i = calculate_stretched_thickness(original_thickness=t0, stretch_factor=pre_stretch)  # moving membrane thickness
+        t_i = t  # moving membrane thickness
         stretch_i = pre_stretch  # moving stretch in flat membrane
         Vol_i = surface_area(l=x_i, shape=actuator_shape) * t_i  # moving volume of flat membrane
 
@@ -443,11 +350,23 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
                                                             t_diel=t_diel, t_memb=t_i,
                                                             U=U_i, R0=surface_roughness)
 
-            # 4. data formulating the zipped segment
+            # Data formulating the zipped segment
             res_zip_i = [i, dL_i, dX_i, dZ_i, L_i, x_i, t_i, stretch_i,
                          perimeter_i, surface_area_i, vol_i,
                          Em_seg_i, Em_seg_i_metal, Es_seg_i]
+
             # ---
+
+            # calculate the original length of this flat section
+            """L_i_eff0 = np.sqrt(x_i ** 2 * t_i / t)
+            # 3. reevaluate flat membrane (calculate new stretch)
+            # SAME: x_i = x_i - 2 * dX  # current width - 2 * differential x-length per segment
+            L_i = (x_i + 2 * dL) * pre_stretch
+            stretch_i = L_i / L_i_eff0
+            Vol_i = Vol_i - vol_i
+            t_i = Vol_i / surface_area(l=x_i, shape=actuator_shape)"""
+
+            # -
 
             # --- CALCULATE THE NEW VALUES FOR SUSPENDED MEMBRANE
             # 1. evaluate moving positions (None)
@@ -456,18 +375,24 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
             x_i = x_i - 2 * dX                                      # new width of surface profile
             Vol_i = Vol_i - vol_i                                   # new volume of suspended membrane
             t_i = Vol_i / surface_area(l=x_i, shape=actuator_shape) # new thickness of suspended membrane
+            if t_i < 0:
+                continue
             stretch_i = np.sqrt(t0 / t_i)                           # new stretch of suspended membrane
-            if np.isnan(stretch_i):
-                # print("Stretch is NaN. Exiting.")
-                pass
 
             # NEW: METAL FILM
             """ NOTE: this assumes volume of metal does not change. I'm going to test this out first. 
             If necessary, I can modify the volume and energy density function to incorporate volumetric change. 
             (see ChatGPT discussion)
             """
-            L_i = L_i - 2 * dL                                      # new width of flat membrane
-            stretch_i_metal = x_i / L_i                             # moving pre-stretch of the metal film
+            # THIS WAY IS MAYBE CORRECT
+            L_i_temp = L_i - 2 * dL                                 # new width of flat membrane
+            stretch_i_metal = x_i / L_i_temp
+            L_i = x_i
+
+            # THIS WAY SEEMS WRONG
+            # L_i = L_i - 2 * dL                                      # new width of flat membrane
+            # stretch_i_metal = x_i / L_i                             # moving pre-stretch of the metal film
+
             Vol_i_metal = surface_area(l=x_i, shape=actuator_shape) * t_metal  # moving volume of the metal film
             # mechanical energy of the metal film
             Em_flat_i_metal = Vol_i_metal * mechanical_energy_density_metal(E=E_metal, nu=nu_metal, l=stretch_i_metal)
@@ -477,9 +402,10 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
             # 3. energy stored in flat membrane
             # mechanical energy of flat membrane
             Em_flat_i = Vol_i * mechanical_energy_density_Gent(mu=mu, J=J, l=stretch_i)
-            # 4. data formulating the flat membrane
+            # Data formulating the flat membrane
             res_flat_i = [L_i_eff0, L_i, x_i, t_i, stretch_i, Vol_i, Em_flat_i,
                           stretch_i_metal, Vol_i_metal, Em_flat_i_metal]
+
             # ---
 
             # --- SUM VALUES FOR ZIPPED + FLAT SEGMENTS
@@ -491,10 +417,11 @@ def calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_mater
             Es_seg_sum_i += Es_seg_i  # total electrical in zipped segments
             # Total energy
             E_tot_i = Em_tot_i + Es_seg_sum_i
-            # Data formulating the total energies of the system
-            res_e_i = [Em_seg_sum_i, Em_tot_i, Es_seg_sum_i, E_tot_i]
 
             # ---
+
+            # Data formulating the total energies of the system
+            res_e_i = [Em_seg_sum_i, Em_tot_i, Es_seg_sum_i, E_tot_i]
             # Add all results and append to list
             res_i = [U_i] + res_zip_i + res_flat_i + res_e_i
             res.append(res_i)
@@ -623,7 +550,6 @@ if __name__ == '__main__':
     # GENT_MODEL_COMPUTED_RESIDUAL_STRESS_FROM_PRE_STRETCH_MEASURED = 223e3  # Pa
     # GENT_MODEL_COMPUTED_PRE_STRETCH = 1.156
 
-
     # general inputs
     TEST_CONFIG = '03052025_W13-D1_C19-30pT_20+10nmAu'
     WID = 13
@@ -680,7 +606,7 @@ if __name__ == '__main__':
         energy.calculate_stretched_thickness(MEMB_ORIGINAL_THICKNESS, MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS), 2)
     # --- STEP B. MECHANICAL PROPERTIES
     # Effective pre-stretch: accounts for stresses due to (1) pre-stretch, and (2) residual stress from metal dep.
-    MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS = 1.1
+    MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS = 1.131
     MODEL_USE_YOUNGS_MODULUS = 1.2  # (MPa)
     # --- STEP C. ELECTRICAL PROPERTIES
     MODEL_USE_THICKNESS_DIELECTRIC = 2.1  # (microns)
@@ -810,6 +736,7 @@ if __name__ == '__main__':
     dict_fid = dict_from_tck(WID, FID, DEPTH, RADIUS, UNITS, NUM_SEGMENTS, fp_tck=FP_TCK, r_min=rmin)
     # ---
     # ---
+
     # surface
     config = 'MoB'
     shape = 'circle'
@@ -819,7 +746,9 @@ if __name__ == '__main__':
     eps_r_diel = MODEL_USE_DIELECTRIC_RELATIVE_PERMITTIVITY
     surface_roughness_diel = MODEL_USE_SURFACE_ROUGHNESS  # units: meters
     # membrane
+    t0 = MEMB_ORIGINAL_THICKNESS * UNITS
     t = MODEL_USE_MEMB_THICKNESS * UNITS
+    pre_stretch_membrane = MODEL_USE_PRE_METAL_PRE_STRETCH_FOR_MEMB_THICKNESS
     pre_stretch = MODEL_USE_POST_METAL_PRE_STRETCH_FOR_TOTAL_STRESS
     Youngs_Modulus = MODEL_USE_YOUNGS_MODULUS * 1e6  # Shear modulus, mu_memb = Youngs_Modulus / 3
     J_memb = MEMB_ORIGINAL_GENT_MODEL_J_MEMB
@@ -900,12 +829,23 @@ if __name__ == '__main__':
         plt.close()
         #"""
 
-    # dict_actuator: shape, profile_x, profile_z, membrane_thickness, pre_stretch, dielectric_thickness
+    # -
+
+    dict_geometry = {
+        'shape': shape,
+        'profile_x': px,
+        'profile_z': py,
+        'membrane_thickness': t,
+        'membrane_pre_stretch': pre_stretch,
+        'metal_thickness': t_metal,
+    }
     dict_actuator = {
         'shape': shape,
         'diameter': diameter,
         'depth': depth,
+        'membrane_thickness_original': t0,
         'membrane_thickness': t,
+        'pre_stretch_membrane': pre_stretch_membrane,
         'pre_stretch': pre_stretch,
         'dielectric_thickness': t_diel,
         'profile_x': px,
@@ -931,12 +871,85 @@ if __name__ == '__main__':
     # ----------
     dZ_clip = 2.5
 
+    save_volume = join(SAVE_DIR, 'volume')
     save_mechanical = join(SAVE_DIR, 'mechanical')
     save_electrical = join(SAVE_DIR, 'electrical')
     save_energy_minima = join(SAVE_DIR, 'energy_minima')
-    for pth in [save_mechanical, save_electrical, save_energy_minima]:
+    for pth in [save_volume, save_mechanical, save_electrical, save_energy_minima]:
         if not os.path.exists(pth):
             os.makedirs(pth)
+
+    df_volume = calculate_zipped_segment_volumes_by_depth(dict_geometry)
+    df_volume.to_excel(join(save_volume, SAVE_ID + '_model_volumes.xlsx'))
+    columns_id = ['step', 'dZ']
+
+    # -
+
+    # --- Elastic energy
+    # Membrane
+    MEMB_E = 1.2e6
+    MEMB_J = 0.5
+    # Metal
+    MET_E = 2.7e9
+    MET_NU = 0.44
+    # Composite bilayer
+    COMP_E = 5e6
+    # -
+    dict_mechanical = {
+        'memb_E': MEMB_E,
+        'memb_J': MEMB_J,
+        'met_E': MET_E,
+        'met_nu': MET_NU,
+        'comp_E': COMP_E,
+    }
+    inputs_elastic = [
+        'vol_i', 'stretch_i',
+        'vol_i_metal', 'stretch_i_metal',
+        'vol_flat', 'stretch_flat',
+        'vol_flat_metal', 'stretch_flat_metal',
+    ]
+    df_elastic = df_volume[columns_id + inputs_elastic]
+    df_elastic = calculate_elastic_energy_by_depth(df_elastic, dict_mechanical)
+    outputs_elastic = [
+        'Em_seg_i_memb', 'Em_seg_i_metal',
+        'Em_seg_i_mm', 'Em_seg_i_comp',
+        'Em_seg_sum_i_memb', 'Em_seg_sum_i_metal', 'Em_seg_sum_i_mm', 'Em_seg_sum_i_comp',
+        'Em_flat_i_memb', 'Em_flat_i_metal', 'Em_flat_i_mm', 'Em_flat_i_comp',
+        'Em_tot_i_memb', 'Em_tot_i_metal', 'Em_tot_i_mm', 'Em_tot_i_comp',
+    ]
+    # -
+
+    # --- Electrostatic energy
+
+    # Electrostatics
+    SURFACE_DIELECTRIC_EPS_R = 3.3
+    SURFACE_DIELECTRIC_THICKNESS = 2e-6
+    SURFACE_DIELECTRIC_SURFACE_ROUGHNESS = 1e-9
+    U = 80
+    # -
+    dict_electrostatic = {
+        'sd_eps_r': SURFACE_DIELECTRIC_EPS_R,
+        'sd_t': SURFACE_DIELECTRIC_THICKNESS,
+        'sd_sr': SURFACE_DIELECTRIC_SURFACE_ROUGHNESS,
+        'voltage': U,
+    }
+    inputs_electrostatic = [
+        'sa_i'
+    ]
+    df_electrostatic = df_volume[columns_id + inputs_electrostatic]
+    df_electrostatic = calculate_electrostatic_energy_by_depth_for_voltage(df_electrostatic, dict_electrostatic)
+    outputs_electrostatic = [
+        'Es_seg_i', 'Es_seg_sum_i',
+    ]
+
+    # --- Total energy
+    df_total_energy = calculate_total_energy_by_depth(
+        df=df_elastic[columns_id + outputs_elastic].join(df_electrostatic[outputs_electrostatic])
+    )
+    outputs_total_energy = [
+        'E_tot_i_memb', 'E_tot_i_mm', 'E_tot_i_comp',
+    ]
+
 
     # --- MECHANICAL ENERGY ONLY
     df = calculate_elastic_energy_of_zipped_profile(config, dict_actuator, dict_material, U_is=[0], dict_metal=dict_metal)

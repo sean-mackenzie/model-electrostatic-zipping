@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
     TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
-    TIDS = [8]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TIDS = [0]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     IV_ACDC = 'AC'  # 'AC' or 'DC'
     ANIMATE_FRAMES = np.arange(40, 200)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
