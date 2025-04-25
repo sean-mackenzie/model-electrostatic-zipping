@@ -215,20 +215,20 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
+    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
 
     # Model params
-    VMAX = 250  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 325  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -165  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -95  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     FREQ_SWEEP_POLY_DEG = 2  # If None, then polynominal degree will be one less than number of frequencies
-    read_model_data = False
+    read_model_data = True
 
-    ALL_TRUE = False  # True False
+    ALL_TRUE = True  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -563,7 +563,6 @@ if __name__ == "__main__":
     # ---
 
     # --- plot using zipped_coords dataset
-
 
     if plot_zipped_coords_on_model:
         DF_ZC = get_all_zipped_coords(

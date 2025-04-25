@@ -91,7 +91,7 @@ def compute_bending_energy_full_curvature(r, z, E, nu, t):
 if __name__ == '__main__':
     # Example usage with synthetic dome profile
     R = 1.585e-3  # radius in meters
-    DZ = 10e-6  # Peak deflection of synthetic dome profile
+    DZ = 100e-6  # Peak deflection of synthetic dome profile
 
     # ---
 
@@ -148,12 +148,18 @@ if __name__ == '__main__':
     t_elastomer = 50e-6
     D = E_elastomer * t_elastomer**3 / (12 * (1 - nu_elastomer**2))
     U = 0.5 * D * (kappa_r**2 + 2 * nu_elastomer * kappa_r * kappa_theta + kappa_theta**2)
-    angular_deflection_degrees = 10
+    print(U)
+    angular_deflection_degrees = 35
     angular_deflection_radians = np.deg2rad(angular_deflection_degrees)
     U2 = 0.5 * D * angular_deflection_radians**2
-    U3 = 0.5 * D * 10**2
+    print("{} uJ: Bending energy of {}-um thick 'plate' (?) (E={} MPa) with "
+          "angular deflection of {} degrees.".format(U2 * 1e6, t_elastomer * 1e6, E_elastomer*1e-6, angular_deflection_degrees))
+    # U3 = 0.5 * D * 10**2  # NOTE: this doesn't make sense since angular deflection is degrees
+    # print(U3)
 
     """ NOTE: the below expression is correct for membrane theory """
     # bending stiffness of a circular membrane, assuming constant curvature
     U4 = 0.5 * np.pi * D * (1 + nu_elastomer)**2 * angular_deflection_radians**2
+    print("{} uJ: Bending energy of {}-um thick 'membrane'(?) (E={} MPa) with "
+          "angular deflection of {} degrees.".format(U4 * 1e6, t_elastomer * 1e6, E_elastomer*1e-6, angular_deflection_degrees))
     a = 1

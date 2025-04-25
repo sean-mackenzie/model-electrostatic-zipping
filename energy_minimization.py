@@ -62,13 +62,12 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
     actuator_shape = dict_geometry['shape']
     profile_x = dict_geometry['profile_x']
     profile_z = dict_geometry['profile_z']
-    X = profile_x.max() * 2
-    # Membrane
+    X = dict_geometry['radius'] * 2  # profile_x.max() * 2
+
+    # Membrane or Composite
     t = dict_geometry['memb_t']
     pre_stretch = dict_geometry['memb_ps']
-    t0 = t * pre_stretch ** 2
-    if t0 < 19.9e-6 or t0 > 20.1e-6:
-        print("CAUTION: memb_t={} ... \n Original thickness should always be 20 microns, except for extreme circumstances.".format(t0))
+    t0 = t * pre_stretch ** 2  # dict_geometry['memb_t0']  # You must define t0 this way, otherwise won't work
     # Metal
     t_metal = dict_geometry['met_t']  # meters
     t_ps_metal = dict_geometry['met_ps']
@@ -96,9 +95,12 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
         dX = profile_x[i] - profile_x[i - 1]
         dZ = (profile_z[i] - profile_z[i - 1]) * -1
         dL = np.sqrt(dX ** 2 + dZ ** 2)
+        slope = dZ / dX
+        slope_angle = np.rad2deg(np.arctan(slope))
         dX_i += dX  # dX_i: current x-direction length of zipped segments
         dZ_i += dZ  # dZ_i (z_i): current z-direction length of zipped segments
         dL_i += dL  # dL_i: current total length (hypotenuse) of zipped segments
+
         # ---
 
         # 2. evaluate current zipped segment
@@ -119,7 +121,8 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
         vol_i_metal = surface_area_i * t_i_metal  # volume of zipped metal segment
 
         # Data formulating the zipped segment
-        res_zip_i = [i, dL_i, dX_i, dZ_i, x_i, perimeter_i, surface_area_i, # purely geometric
+        res_zip_i = [i, dL, dX, dZ, slope, slope_angle,
+                     dL_i, dX_i, dZ_i, x_i, perimeter_i, surface_area_i, # purely geometric
                      t_i, vol_i, stretch_i,  # geometry of this zipped membrane segment
                      t_i_metal, vol_i_metal, stretch_i_metal,  # geometry of this zipped metal segment
                      ]
@@ -149,7 +152,7 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
         res.append(res_i)
 
     # dataframe
-    columns_zip = ['step',
+    columns_zip = ['step', 'dL_i', 'dX_i', 'dZ_i', 'slope_i', 'theta_i',
                    'dL', 'dX', 'dZ', 'x_i', 'perimeter_i', 'sa_i',
                    't_i', 'vol_i', 'stretch_i',
                    't_i_metal', 'vol_i_metal', 'stretch_i_metal',
@@ -168,8 +171,12 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
 
 
 def calculate_radial_displacement_by_depth(df):
-    df['stretch_due_to_zipping'] = np.sqrt(df['t_i'].iloc[0] / df['t_i'])
+    df['stretch_due_to_zipping'] = np.sqrt(df['t_i'].iloc[0] / df['t_flat'])
     df['disp_r_microns'] = (df['stretch_due_to_zipping'] - 1) * df['x_flat'] / 2 * 1e6  # divide by 2 = radial displacement
+
+    df['apparent_dr_microns'] = np.sin(np.deg2rad(df['theta_i'])) * df['t_i'] * -1e6
+    df['disp_r_microns_corr'] = df['disp_r_microns'] + df['apparent_dr_microns']
+
     # The "old" (before 4/14/25) method of calculating these are below. They give identical results
     # But I feel more comfortable using the above approach, which makes more intuitive sense.
     # df['stretch_ratio'] = df['stretch_flat'] / df['stretch_i'].iloc[0]
@@ -180,12 +187,16 @@ def calculate_radial_displacement_by_depth(df):
 def plot_deformation_by_depth(df, path_save, save_id, z_clip=2.5):
     px = 'dZ'
     py1 = 't_flat'
-    py2, lbl2 = 'stretch_flat', r'$\lambda_{true}$'
+    py2, lbl2 = 'stretch_flat', r'$\lambda_{total}$'
     py2b, lbl2b = 'stretch_due_to_zipping', r'$\lambda_{zipping}$'
     py3 = 'disp_r_microns'
+    py3_corr = 'apparent_dr_microns'
+    py3b = 'disp_r_microns_corr'
 
     x3 = df[px].to_numpy() * 1e6
     y3 = df[py3].to_numpy()
+    y3_corr = df[py3_corr].to_numpy()
+    y3b = df[py3b].to_numpy()
 
     df = df[df[px] < df[px].max() - z_clip * 1e-6]
     x12 = df[px] * 1e6
@@ -205,9 +216,11 @@ def plot_deformation_by_depth(df, path_save, save_id, z_clip=2.5):
     ax2.grid(alpha=0.25)
     ax2.legend(fontsize='small')
 
-    ax3.plot(x3, y3, label=py3)
+    ax3.plot(x3, y3, label=r'$\Delta r$')
+    ax3.plot(x3, y3b, label=r'$\Delta r_{corr}$')
     ax3.set_ylabel(r'$\Delta r_{o, zipping} \: (\mu m)$')
     ax3.grid(alpha=0.25)
+    ax3.legend(fontsize='small')
     ax3.set_xlabel('Depth (um)')
 
     plt.tight_layout()
@@ -868,6 +881,7 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
         hole=include_through_hole,
         fid_override=fid,
     )
+
     save_id = 'wid{}_fid{}'.format(wid, fid)
     save_dir = join(analyses_dir, 'modeling', save_sub_dir)
     read_tck, fn_tck = join(save_dir, 'tck'), 'fid{}_tc_k=3.xlsx'.format(fid)
@@ -926,12 +940,22 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
         plt.close()
         #"""
 
-    return save_id, save_dir, dict_surface, profile_x, profile_y
+
+    dict_surface.update({
+        'depth_um': dict_fid['depth'],
+        'radius_um': dict_fid['radius'],
+        'depth': dict_fid['depth'] * 1e-6,
+        'radius': dict_fid['radius'] * 1e-6,
+        'r': dict_fid['r'],
+        'z': dict_fid['z'],
+    }) # # , profile_x, profile_y
+
+    return save_id, save_dir, dict_surface
 
 
-def set_up_model(test_config, wid, memb_id, root_dir, save_sub_dir, dict_override=None):
+def set_up_model(test_config, wid, memb_id, use_memb_or_comp, root_dir, save_sub_dir, dict_override=None):
     # set up model directories and get surface profile
-    save_id, path_save_dir, dict_surf, px, py = set_up_model_directories_and_get_surface_profile(
+    save_id, path_save_dir, dict_surf = set_up_model_directories_and_get_surface_profile(
         root_dir, test_config, wid, save_sub_dir, dict_override,
     )
     # get membrane settings
@@ -954,19 +978,32 @@ def set_up_model(test_config, wid, memb_id, root_dir, save_sub_dir, dict_overrid
         index_label='k',
     )
 
+    if use_memb_or_comp == 'memb':
+        memb_t0 = dict_memb['memb_t0']
+        memb_t = dict_memb['memb_t']
+        memb_ps = dict_memb['memb_ps']
+    elif use_memb_or_comp == 'comp':
+        memb_t0 = dict_memb['comp_t0']
+        memb_t = dict_memb['comp_t']
+        memb_ps = dict_memb['comp_ps']
+    else:
+        raise ValueError('use_memb_or_comp must be "memb" or "comp"')
+
     dict_geometry = {
         'shape': dict_surf['shape'],
-        'profile_x': px,
-        'profile_z': py,
-        'memb_t': dict_memb['memb_t_post_measured_pre_stretch'],
-        'memb_ps': dict_memb['memb_pre_stretch_measured'],
+        'radius': dict_surf['radius'],
+        'profile_x': dict_surf['r'],
+        'profile_z': dict_surf['z'],
+        'memb_t0': memb_t0,
+        'memb_t': memb_t,
+        'memb_ps': memb_ps,
         'met_t': dict_memb['met_t'],
         'met_ps': dict_memb['met_ps'],
     }
     dict_mechanical = {
         'memb_E': dict_memb['memb_E'],
         'memb_J': dict_memb['memb_J'],
-        'met_E': dict_memb['met_E_from_measured_comp_E'],
+        'met_E': dict_memb['met_E'],
         'met_nu': dict_memb['met_nu'],
         'comp_E': dict_memb['comp_E'],
     }
@@ -975,12 +1012,6 @@ def set_up_model(test_config, wid, memb_id, root_dir, save_sub_dir, dict_overrid
         'sd_t': dict_surf['sd_t'],
         'sd_sr': dict_surf['sd_sr'],
     }
-
-    """dict_model_solve = {
-        'geometry': dict_geometry,
-        'mechanical': dict_mechanical,
-        'electrostatic': dict_electrostatic,
-    }"""
 
     dict_model_solve = {**dict_geometry, **dict_mechanical, **dict_electrostatic}
 
@@ -1000,7 +1031,8 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
         else:
             raise ValueError('Test config not in settings.')
     elif wid == 10:
-        if test_config in ['01092025_W10-A1_C9-0pT']:
+        if test_config in ['01092025_W10-A1_C9-0pT', '02202025_W10-A1_C21-15pT', '01262025_W10-A1_C7-20pT',
+                           '02142025_W10-A1_C22-20pT', '02252025_W10-A1_C17-20pT']:
             surface_profile_radius_adjust = 20
             surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
             tck_smoothing = 1
@@ -1051,6 +1083,9 @@ def sweep_formatter(key, values):
     elif key == 'comp_E':
         units = 'MPa'
         scale_units = 1e6
+    elif key == 'comp_ps':
+        units = ''
+        scale_units = 1
     elif key == 'memb_t':
         units = 'um'
         scale_units = 1e-6
@@ -1075,20 +1110,45 @@ def sweep_formatter(key, values):
     return values, labels, units
 
 
+def recommended_sweep(memb_id, sweep_key):
+    values, measured_idx = None, None
+    if sweep_key == 'comp_E':
+        if memb_id in ['C9-0pT-20nmAu', 'C7-20pT-20nmAu', 'C22-20pT-20nmAu']:
+            values = [2.5, 3.7, 5, 7.5]
+            measured_idx = 1
+        elif memb_id in ['C17-20pT-25nmAu', 'C15-15pT-25nmAu']:
+            values = [4.6, 6, 7.5]
+            measured_idx = 0
+        elif memb_id in ['C21-15pT-30nmAu', 'C19-30pT-20+10nmAu']:
+            values = [5.5, 6.5, 7.5]
+            measured_idx = 0
+    elif sweep_key == 'memb_ps':
+        if memb_id in ['C9-0pT-20nmAu']:
+            values = [1.0, 1.006, 1.016, 1.026]
+            measured_idx = 1
+        elif memb_id in ['C22-20pT-20nmAu']:
+            values = [1.06, 1.08, 1.1, 1.12]
+            measured_idx = 1
+
+    return values, measured_idx
 
 if __name__ == '__main__':
 
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
+    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
     WID = 10  # 13
 
-    MEMB_ID = 'C9-0pT-20nmAu'
-    # DICT_MEMB = materials.get_membrane_settings(memb_id=MEMB_ID)
+    MEMB_ID = 'C17-20pT-25nmAu'
+    USE_MEMB_OR_COMP = 'comp'  # 'memb' or 'comp'
 
     # Set up configurations to iterate through
-    sweep_key = 'memb_ps'  # 'memb_E', 'met_E', 'comp_E', 'memb_t', 'memb_ps', 'sd_t', 'sd_eps_r', 'memb_J'
-    sweep_values = [1.0, 1.01, 1.02, 1.03]
-    use_neo_hookean = False
+    sweep_key = 'comp_E'  # 'comp_E', 'memb_E', 'met_E', 'memb_t', 'memb_ps', 'sd_t', 'sd_eps_r', 'memb_J'
+    sweep_values, measured_idx = recommended_sweep(MEMB_ID, sweep_key)
+    print(sweep_values)
+    if sweep_values is None:
+        sweep_values = [5.5, 6.5, 7.5]  # NOTE: correct units are automatically applied
+        measured_idx = -1
+        raise ValueError()
 
     smoothing = 0.01
     dict_override = {
@@ -1098,29 +1158,29 @@ if __name__ == '__main__':
         # 'num_segments': 2000,
     }
 
-    plot_sweep_idx = [-1]  # plot these sweep values (by index)
-    SAVE_SUB_DIR = 'sweep_' + sweep_key # + f'_s={smoothing}' # + '_metal-pre-stretch=1.006' #+ '_NeoHookean' # + f'_s={smoothing}'
-
-
+    plot_sweep_idx = [measured_idx]  # plot these sweep values (by index)
+    SAVE_SUB_DIR = USE_MEMB_OR_COMP + '_sweep_' + sweep_key # + f'_s={smoothing}' # + '_metal-pre-stretch=1.006' #+ '_NeoHookean' # + f'_s={smoothing}'
 
     # --- --- SOLVER SEQUENCE
 
-    save_id, save_dir, dict_model_solve = set_up_model(TEST_CONFIG, WID, MEMB_ID, ROOT_DIR, SAVE_SUB_DIR, dict_override)
+    save_id, save_dir, dict_model_solve = set_up_model(TEST_CONFIG, WID, MEMB_ID, USE_MEMB_OR_COMP,
+                                                       ROOT_DIR, SAVE_SUB_DIR, dict_override)
     sweep_values, sweep_labels, sweep_units = sweep_formatter(sweep_key, sweep_values)
     save_sweep = save_id
     save_sweep_value = save_id
     z_clip = 2.5
-    voltages = np.arange(25, 201, 5)
+    voltages = np.arange(20, 401, 5)
     ignore_dZ_below_v = (10e-6, 150)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
+    use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
-    export_elastic_energy = False  # True False
+    export_elastic_energy = True  # True False
     export_all_energy = False
     export_total_energy = False
     # plotting (if None, then do not plot. Otherwise, plot energy by depth for specified voltages)
-    plot_e_by_z_overlay_v = None  # [[30, 40, 50, 60], [40, 80, 120, 160, 200, 240], [150, 175, 200, 225, 250]]
+    plot_e_by_z_overlay_v = [[30, 40, 50, 60], [40, 80, 120, 160, 200, 240], [150, 175, 200, 225, 250]]
     animate_e_by_z_by_v = None  # None or a list of voltages to plot total energy vs depth
-    plot_minima_for_vs = None  # [80, 85, 90, 95, 100]  # None or a list of voltages to plot total energy vs depth and first minima
+    plot_minima_for_vs = None # [80, 85, 90, 95, 100]  # None or a list of voltages to plot total energy vs depth and first minima
     animate_minima_by_z_by_v = None # np.arange(60, 256, 5)  # None or a list of voltages to plot total energy vs depth and first minima
 
     # -
@@ -1163,6 +1223,7 @@ if __name__ == '__main__':
     # ---
 
     # --- Volumes
+    #if sweep_key not in ['memb_t', 'memb_ps', 'met_t', 'met_ps']:
     df_volume = calculate_zipped_segment_volumes_by_depth(dict_model_solve)
     df_volume.to_excel(join(save_volume, save_id + '_model_volumes.xlsx'), index=False)
 
@@ -1175,8 +1236,9 @@ if __name__ == '__main__':
     # ------------------- # ------------------- ITERATE CONFIGURATIONS AND SOLVE
 
     df_dZ_by_v_by_E = []
-    for i, sweep_value in enumerate(sweep_values):
-        save_id = save_sweep_value + '_{}_{}MPa'.format(sweep_key, sweep_value * 1e-6)
+    ii = np.arange(len(sweep_values))
+    for i, sweep_value, sweep_label in zip(ii, sweep_values, sweep_labels):
+        save_id = save_sweep_value + '_{}_{}{}'.format(sweep_key, sweep_label, sweep_units)
         dict_model_solve.update({sweep_key: sweep_value})
 
         # -
@@ -1197,6 +1259,7 @@ if __name__ == '__main__':
         # Elastic energy
         df_elastic = calculate_elastic_energy_by_depth(df_volume[columns_id + inputs_elastic], dict_model_solve,
                                                        use_neo_hookean=use_neo_hookean)
+
         if i in plot_sweep_idx and export_elastic_energy is True:
             df_elastic.to_excel(join(save_elastic, save_id + '_model_elastic_energy.xlsx'), index=False)
             plot_elastic_energy_by_depth(df_elastic, save_elastic, save_id + '_model_elastic_energy.png', z_clip)

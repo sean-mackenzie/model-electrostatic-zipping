@@ -7,11 +7,11 @@ from utils import energy
 if __name__ == '__main__':
 
     # Material parameters of pristine material (i.e., before pre-stretching)
-    E = 1100  # (kPa) Young's modulus
+    E = 1200  # (kPa) Young's modulus
     J_M = 54  # extensibility constant for Gent hyperelastic model
 
-    KNOWN_PRE_STRETCH = 1.131
-    KNOWN_SIGMA_0 = 260  # (kPa) residual stress
+    KNOWN_PRE_STRETCH = 1.25
+    KNOWN_SIGMA_0 = 420  # (kPa) residual stress
 
     # --- ---
 
@@ -30,12 +30,12 @@ if __name__ == '__main__':
         sigma=KNOWN_SIGMA_0,
         mu=shear_modulus,
         Jm=J_M,
-        initial_guess=1.5,
+        initial_guess=1.15,
     )
     neo_hookean_pre_stretch = energy.compute_neo_hookean_stretch_from_stress(
         sigma=KNOWN_SIGMA_0,
         mu=shear_modulus,
-        initial_guess=1.5,
+        initial_guess=1.15,
     )
     print("Gent pre-stretch:", gent_pre_stretch)
     print("Neo-Hookean pre-stretch:", neo_hookean_pre_stretch)

@@ -39,10 +39,14 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
-    TIDS = [0]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
-    IV_ACDC = 'AC'  # 'AC' or 'DC'
-    ANIMATE_FRAMES = np.arange(40, 200)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
+    TIDS = np.arange(29, 36)  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    ONLY_TIDS_WITH_TEST_SETTINGS = True
+    IV_ACDC = 'DC'  # 'AC' or 'DC'
+
+    # ---
+
+    ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
     # -
     # SETTINGS (True False)
@@ -54,9 +58,9 @@ if __name__ == "__main__":
     # -
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
-    SECOND_PASS = True  # True False
+    SECOND_PASS = False  # True False
     EXPORT_NET_D0ZR, AVG_MAX_N = False, 50  # True: export dfd0 to special directory
-    EXPORT_ZIPPED_COORDS = False
+    EXPORT_ZIPPED_COORDS = True
     ZIPPED_ONLY_FRAMES = None
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
@@ -115,6 +119,12 @@ if __name__ == "__main__":
         FN_IV_AVG_SAVE = 'tid{}_average-V-t.xlsx'.format(TID)
         # Merged (3DPT + Keithley)
         FN_MERGED = 'tid{}_merged-coords-volt.xlsx'.format(TID)
+        # -
+        # Conditional
+        if ONLY_TIDS_WITH_TEST_SETTINGS:
+            if not os.path.exists(FP_TEST_SETTINGS):
+                print("Skipping TID{} because test settings were not found.".format(TID))
+                continue
         # -
         # Initialize
         DF_ZIPPED = None
