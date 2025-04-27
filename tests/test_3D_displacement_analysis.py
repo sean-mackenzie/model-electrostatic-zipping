@@ -39,8 +39,8 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '02142025_W10-A1_C22-20pT'
-    TIDS = np.arange(29, 36)  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
+    TIDS = [1]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     ONLY_TIDS_WITH_TEST_SETTINGS = True
     IV_ACDC = 'DC'  # 'AC' or 'DC'
 

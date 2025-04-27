@@ -204,12 +204,14 @@ def pre_process_model_dZ_by_V_for_compare(dfm, mkey=None, mval=None, extend_max_
     y = dfm[my].to_numpy() * -1e6
     x = x[np.argmax(y):]
     y = y[np.argmax(y):]
+    x1_dzero = np.array([x[0]])
+    y1_dzero = np.array([0])
     x0 = np.array([0])
     y0 = np.array([0])
     xf = np.array([np.max([extend_max_voltage, x.max()])])
     yf = np.array([np.min(y)])
-    x = np.concatenate((x0, x, xf))
-    y = np.concatenate((y0, y, yf))
+    x = np.concatenate((x0, x1_dzero, x, xf))
+    y = np.concatenate((y0, y1_dzero, y, yf))
     return x, y
 
 def compare_dZ_by_V_with_model(df, dfm, path_results, save_id, mkey=None, mval=None, dz='d0z'):
@@ -393,20 +395,20 @@ def compare_corrected_zipped_stretch_with_model(df, dfm, correction_function, pr
 
     fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(4.5, 6))
 
-    ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})')
-    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Zipped Data')
+    ax0.plot(mx3, dfm['dr_corr'], '-', color='tab:blue', lw=lw, label=f'Model (deg={poly_deg_id})', zorder=3.1)
+    ax0.plot(x, dy3_corr, 'bo', ms=ms, label='Zipped Data', zorder=3)
     ax0.set_ylabel(r'$\Delta_{corr} r \: (\mu m)$')
     ax0.grid(alpha=0.15)
     ax0.legend(fontsize='xx-small')
 
-    ax1.plot(mx3, my3, 'k-', lw=lw, label='Model-Raw')
-    ax1.plot(x, y3_corr, 'ro', ms=ms, label='Zipped Data-Corrected')
+    ax1.plot(mx3, my3, 'k-', lw=lw, label='Model-Raw', zorder=3.1)
+    ax1.plot(x, y3_corr, 'ro', ms=ms, label='Zipped Data-Corrected', zorder=3)
     ax1.set_ylabel(ylabel)
     ax1.grid(alpha=0.15)
     ax1.legend(fontsize='xx-small', loc='upper left')
 
-    ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected')
-    ax2.plot(x, y3, 'ko', ms=ms, label='Zipped Data-Raw')
+    ax2.plot(mx3, my3_corr, 'r-', lw=lw, label='Model-Corrected', zorder=3.1)
+    ax2.plot(x, y3, 'ko', ms=ms, label='Zipped Data-Raw', zorder=3)
     ax2.set_ylabel(ylabel)
     ax2.set_xlabel(xlabel)
     ax2.grid(alpha=0.15)

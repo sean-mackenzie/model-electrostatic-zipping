@@ -4,10 +4,11 @@
 from os.path import join
 import numpy as np
 import pandas as pd
+from scipy.interpolate import BSpline, splrep
 from scipy.special import erf
 import matplotlib.pyplot as plt
 
-from scipy.interpolate import splrep, BSpline, make_splrep, splev, splrep, splder, sproot
+from utils.empirical import smooth_symmetric_profile_with_tolerance
 
 
 def smooth_array(x, y, smoothing, num_points, degree=3, return_tck=False):
@@ -62,6 +63,11 @@ def plot_surface_profile_2nd_derivative(x, y, path_save, smoothing=100):
 
 
 def manually_fit_tck(df, subset, radius, smoothing=50, num_points=500, degree=3, path_save=None, show_plots=True,):
+
+    if subset.startswith('average_'):
+        smooth_r, smooth_z = smooth_symmetric_profile_with_tolerance(df['r'].to_numpy(), df['z'].to_numpy(), tolerance=2)
+        df = pd.DataFrame({'r': smooth_r, 'z': smooth_z})
+        subset = subset.replace('average_', '')
 
     # create figure and plot at each step
     fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, sharex=True, figsize=(10, 10))

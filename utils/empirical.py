@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 from scipy.interpolate import BSpline
 
 
@@ -76,6 +77,7 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
     # -
     # keep only necessary columns
     df = df[['x', 'z', 'r']]
+
     # filter out profile where through-hole has been etched
     if hole:
         df = df[df['r'].abs() > dict_settings['radius_hole_microns']]
@@ -92,10 +94,62 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
     elif subset == 'left_half':
         df = df[df['r'] < 0]
         df['r'] = df['r'].abs()
+    elif subset == 'average_halves':
+        smooth_r, smooth_z = smooth_symmetric_profile_with_tolerance(df['r'].to_numpy(), df['z'].to_numpy(), tolerance=2)
+        df = pd.DataFrame({'r': smooth_r, 'z': smooth_z})
+        df = df[df['r'] > 0]
     else:
         raise ValueError("Options are: [None or full, abs, right_half, left_half]")
 
     return df
+
+def smooth_symmetric_profile_with_tolerance(r, z, tolerance=2):
+        """
+        Smooths a profile by mirroring it about r=0 and averaging within a tolerance range.
+
+        Parameters:
+        r (array-like)       : Array of r values (e.g., -1000 to 1000, non-symmetric).
+        z (array-like)       : Corresponding array of z values.
+        tolerance (float)    : Range of r values (±tolerance) to average for smoothing.
+
+        Returns:
+        r_smooth (numpy.ndarray): Array of smoothed r values (from input data).
+        z_smooth (numpy.ndarray): Array of averaged z values corresponding to r_smooth.
+        """
+        # Ensure inputs are numpy arrays
+        #r = np.array(r)
+        #z = np.array(z)
+
+        # Create the mirrored profile
+        r_mirrored = -r
+        z_mirrored = z  # z values remain the same
+
+        # Combine original and mirrored profiles
+        r_combined = np.concatenate((r, r_mirrored))
+        z_combined = np.concatenate((z, z_mirrored))
+
+        # Sort by r
+        sorted_indices = np.argsort(r_combined)
+        r_sorted = r_combined[sorted_indices]
+        z_sorted = z_combined[sorted_indices]
+
+        # Initialize smoothed profile arrays
+        r_smooth = []
+        z_smooth = []
+
+        # Perform averaging within the tolerance
+        for r_value in r:
+            # Find indices where r_combined is within tolerance of r_value
+            mask = np.abs(r_sorted - r_value) <= tolerance
+
+            # If any points fall within the tolerance range, compute the mean z
+            if np.any(mask):
+                z_mean = np.mean(z_sorted[mask])
+                r_smooth.append(r_value)
+                z_smooth.append(z_mean)
+
+        return np.array(r_smooth), np.array(z_smooth)
+
 
 def get_surface_profile_dict(dict_settings, subset='right', include_hole=True, shift_r=0, shift_z=0, scale_z=1):
     if 'fid_process_profile' in dict_settings.keys():

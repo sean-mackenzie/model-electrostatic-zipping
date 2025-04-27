@@ -926,18 +926,20 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
     # profile to model
     px, py = dict_fid['r'], dict_fid['z']
     profile_x, profile_y = px, py
-    if not os.path.exists(join(read_tck, save_id + '_profile.png')):
-        fig, ax = plt.subplots(figsize=(5, 3))
-        ax.plot(px * 1e3, py * 1e6, label=np.round(np.min(py * 1e6), 1))
-        ax.set_xlabel('mm')
-        ax.set_ylabel('um')
-        ax.grid(alpha=0.25)
-        ax.legend(title='Depth (um)')
-        ax.set_title('dz/segment = {} um ({} segs)'.format(np.round(np.min(py * 1e6) / len(px), 2), len(px)))
-        plt.suptitle(save_id)
-        plt.tight_layout()
-        plt.savefig(join(read_tck, save_id + '_profile.png'), facecolor='w')
-        plt.close()
+
+    # ALWAYS PLOT THE PROFILE!!!
+    # if not os.path.exists(join(read_tck, save_id + '_profile.png')):
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.plot(px * 1e3, py * 1e6, label=np.round(np.min(py * 1e6), 1))
+    ax.set_xlabel('mm')
+    ax.set_ylabel('um')
+    ax.grid(alpha=0.25)
+    ax.legend(title='Depth (um)')
+    ax.set_title('dz/segment = {} um ({} segs)'.format(np.round(np.min(py * 1e6) / len(px), 2), len(px)))
+    plt.suptitle(save_id)
+    plt.tight_layout()
+    plt.savefig(join(read_tck, save_id + '_profile.png'), facecolor='w')
+    plt.close()
         #"""
 
 
@@ -1025,27 +1027,57 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
     surface_dielectric_thickness = 2e-6
     num_segments = 2000
 
+    surface_profile_radius_adjust = None
+    surface_profile_subset = None
+    tck_smoothing = None
+
     if wid == 5:
-        if test_config in ['01092025_W10-A1_C9-0pT']:
-            raise ValueError("Test config not set up yet.")
-        else:
-            raise ValueError('Test config not in settings.')
+        if test_config in ['01082025_W5-D1_C9-0pT']:
+            surface_profile_radius_adjust = 0
+            surface_profile_subset = 'left_half'  # 'right_half' 'left_half'
+            tck_smoothing = 28.0
+        elif test_config in ['01272025_W5-D1_C7-20pT']:
+            surface_profile_radius_adjust = -10
+            surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
+            tck_smoothing = 0.0
     elif wid == 10:
         if test_config in ['01092025_W10-A1_C9-0pT', '02202025_W10-A1_C21-15pT', '01262025_W10-A1_C7-20pT',
                            '02142025_W10-A1_C22-20pT', '02252025_W10-A1_C17-20pT']:
             surface_profile_radius_adjust = 20
             surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
             tck_smoothing = 1
-        else:
-            raise ValueError('Test config not in settings.')
+    elif wid == 11:
+        if test_config in ['01122025_W11-B1_C9-0pT', '03072025_W11-A1_C19-30pT_20+10nmAu']:
+            surface_profile_radius_adjust = 30
+            surface_profile_subset = 'left_half'  # 'right_half' 'left_half' 'average_right_half'
+            tck_smoothing = 0
+    elif wid == 12:
+        if test_config in ['01122025_W12-D1_C9-0pT']:
+            surface_profile_radius_adjust = 15
+            surface_profile_subset = 'average_right_half'
+            tck_smoothing = 12
+        elif test_config in ['01282025_W12-D1_C7-20pT']:
+            surface_profile_radius_adjust = 0
+            surface_profile_subset = 'average_right_half'
+            tck_smoothing = 10
+        elif test_config in ['03072025_W12-D1_C19-30pT_20+10nmAu']:
+            surface_profile_radius_adjust = 30
+            surface_profile_subset = 'average_right_half'
+            tck_smoothing = 0.1
     elif wid == 13:
         if test_config in ['03052025_W13-D1_C19-30pT_20+10nmAu']:
             surface_profile_radius_adjust = 30
             surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
             tck_smoothing = 250
-        else:
-            raise ValueError('Test config not in settings.')
+    elif wid == 14:
+        if test_config in ['01132025_W14-F1_C9-0pT']:
+            surface_profile_radius_adjust = 10
+            surface_profile_subset = 'left_half'  # 'right_half' 'left_half'
+            tck_smoothing = 25
     else:
+        pass
+
+    if surface_profile_subset is None:
         raise ValueError('wid not in settings.')
 
     dict_surface = {
@@ -1126,19 +1158,23 @@ def recommended_sweep(memb_id, sweep_key):
         if memb_id in ['C9-0pT-20nmAu']:
             values = [1.0, 1.006, 1.016, 1.026]
             measured_idx = 1
+        elif memb_id in ['C7-20pT-20nmAu']:
+            values = [1.04, 1.061, 1.09, 1.12]
+            measured_idx = 1
         elif memb_id in ['C22-20pT-20nmAu']:
             values = [1.06, 1.08, 1.1, 1.12]
             measured_idx = 1
 
     return values, measured_idx
 
+
 if __name__ == '__main__':
 
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_CONFIG = '02252025_W10-A1_C17-20pT'
-    WID = 10  # 13
+    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
+    WID = 14
 
-    MEMB_ID = 'C17-20pT-25nmAu'
+    MEMB_ID = 'C9-0pT-20nmAu'
     USE_MEMB_OR_COMP = 'comp'  # 'memb' or 'comp'
 
     # Set up configurations to iterate through
@@ -1150,7 +1186,7 @@ if __name__ == '__main__':
         measured_idx = -1
         raise ValueError()
 
-    smoothing = 0.01
+
     dict_override = {
         # 'surface_profile_radius_adjust': 15,
         # 'surface_profile_subset': 'left_half',  # 'right_half' 'left_half'
@@ -1169,8 +1205,8 @@ if __name__ == '__main__':
     save_sweep = save_id
     save_sweep_value = save_id
     z_clip = 2.5
-    voltages = np.arange(20, 401, 5)
-    ignore_dZ_below_v = (10e-6, 150)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
+    voltages = np.arange(5, 201, 5)
+    ignore_dZ_below_v = (25e-6, 50)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
     use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
@@ -1178,7 +1214,7 @@ if __name__ == '__main__':
     export_all_energy = False
     export_total_energy = False
     # plotting (if None, then do not plot. Otherwise, plot energy by depth for specified voltages)
-    plot_e_by_z_overlay_v = [[30, 40, 50, 60], [40, 80, 120, 160, 200, 240], [150, 175, 200, 225, 250]]
+    plot_e_by_z_overlay_v = None  # [[30, 40, 50, 60], [40, 80, 120, 160, 200], [150, 175, 200]]
     animate_e_by_z_by_v = None  # None or a list of voltages to plot total energy vs depth
     plot_minima_for_vs = None # [80, 85, 90, 95, 100]  # None or a list of voltages to plot total energy vs depth and first minima
     animate_minima_by_z_by_v = None # np.arange(60, 256, 5)  # None or a list of voltages to plot total energy vs depth and first minima
