@@ -76,7 +76,7 @@ def read_surface_profile(dict_settings, subset=None, hole=True, fid_override=Non
     df = df[(df['fid'] == fid) & (df['step'] == step)]
     # -
     # keep only necessary columns
-    df = df[['x', 'z', 'r']]
+    df = df[['z', 'r']]
 
     # filter out profile where through-hole has been etched
     if hole:
@@ -234,13 +234,26 @@ def get_apparent_radial_displacement_due_to_rotation_function(surf_r, surf_z, po
     # Derivative of the fitted polynomial
     polynomial_derivative = polynomial.deriv()
 
-    # Define a function that gives the apparent radial displacement
+    # I'm not sure if this function setup ever worked.
+    """
     def apparent_radial_displacement(r):
         r_bounds = (np.min(x), np.max(x))
         if r < r_bounds[0] or r > r_bounds[1]:
             return 0
         else:
             return membrane_thickness * np.sin(np.arctan(polynomial_derivative(r)))
+    """
+
+    # Define a function that gives the apparent radial displacement
+    def apparent_radial_displacement(r):
+        rmin = x.min()
+        rmax = x.max()
+        # Define a helper function
+        def process_element(xn, lower_limit, upper_limit):
+            if lower_limit <= xn <= upper_limit:
+                return membrane_thickness * np.sin(np.arctan(polynomial_derivative(xn)))
+            return 0
+        return r.apply(lambda xm: process_element(xm, lower_limit=rmin, upper_limit=rmax))
 
     return apparent_radial_displacement
 

@@ -108,18 +108,18 @@ def compare_dZmin_by_V_with_model(df, dfm, path_results, save_id, dz, mkey, mval
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01272025_W5-D1_C7-20pT'
+    TEST_CONFIG = '03122025_W13-D1_C15-15pT_25nmAu'
     # Coords
-    TID = 3  # 6, 7,
-    ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
-    D0Z_MIN = -90
+    TID = 1  # 6, 7,
+    ONLY_PIDS = None # if None, will plot all pids or defer (sequentially) to following filters
+    D0Z_MIN = -175
     D0Z_QUANTILE = 0.02
     # Model
     MODEL_DIR = 'comp_sweep_comp_E'
     MODEL_MKEY = 'comp_E'
-    MODEL_MVAL = 3700000
-    LABEL_MVAL = '3.7MPa'
-    VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
+    MODEL_MVAL = 4600000
+    LABEL_MVAL = '4.6MPa'
+    VMAX = 300  # if VMAX is lower than model's Vmax, then do nothing
 
     # ---
 

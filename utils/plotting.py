@@ -431,8 +431,13 @@ def compare_depth_dependent_in_plane_stretch_with_model(dfd, dfm, path_results, 
     # because strain goes highly non-linear near max deflection, we must limit
     dfm = dfm[dfm['dZ'] < dfm['dZ'].max() - 2e-6]
     mx = dfm['dZ'] * 1e6
-    my1 = dfm['t_f'] * 1e6
-    my2a, my2b = dfm['strain_xy'], dfm['strain_z_inv']
+    if 't_f' in dfm.columns:
+        my1 = dfm['t_f'] * 1e6
+        my2a = dfm['strain_xy']
+        print("Processing old model data (i.e., not comp_E)")
+    else:
+        my1 = dfm['t_flat'] * 1e6
+        my2a = dfm['stretch_flat']
 
     # --- plot
 

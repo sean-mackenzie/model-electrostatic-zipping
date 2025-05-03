@@ -120,12 +120,12 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     # -
     if 'smu_test_type' in dict_test.keys():
         if dict_test['smu_test_type'] in [1, 2, '1', '2']:
-            compare_pull_in_voltage_with_model = True
-            plot_depth_dependent_in_plane_stretch = True
-            plot_pids_dr_by_dz = True
+            compare_pull_in_voltage_with_model = False
+            plot_depth_dependent_in_plane_stretch = False
+            plot_pids_dr_by_dz = False
             plot_pids_dz_by_voltage_hysteresis = False
-            plot_normalized_membrane_profile, frois_norm_profile = True, [30, 83, 84, 108, 109, 110]
-            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [30, 83, 84, 108, 109, 110]
+            plot_normalized_membrane_profile, frois_norm_profile = True, [2, 108, 115, 120, 127]
+            plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [2, 108, 115, 120, 127]
         else:
             compare_pull_in_voltage_with_model = False
             plot_depth_dependent_in_plane_stretch = False
@@ -166,18 +166,18 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
     average_max_n_positions = average_max_n
     # -
-    plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
+    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
     plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_by_synchronous_time_voltage = True
+    plot_pids_by_synchronous_time_voltage = False
     plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
-    plot_quiver_xy_by_frame = True
-    plot_1D_dz_by_r_by_frame_with_surface_profile = True
+    plot_quiver_xy_by_frame = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = False
     show_zipping_interface = True
-    dr_ampl = 10
+    dr_ampl = 1
     fit_spline_to_memb = False
     test_description = dict_test['filename'].split('.xlsx')[0].split('_data')[0].replace('_', ' ')
     if (plot_quiver_xy_by_frame or plot_1D_dz_by_r_by_frame_with_surface_profile or

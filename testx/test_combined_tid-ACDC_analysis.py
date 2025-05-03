@@ -215,7 +215,7 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
+    TEST_CONFIG = '01082025_W5-D1_C9-0pT'
 
     # Model params
     VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
@@ -223,11 +223,11 @@ if __name__ == "__main__":
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -160  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -110  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     FREQ_SWEEP_POLY_DEG = 2  # If None, then polynominal degree will be one less than number of frequencies
     read_model_data = True
-    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 12
+    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 4
     Z_CLIP_SURFACE_PROFILE = -0.125  # -0.125 for most; (W11: -0.8; W13: -0.85; W5: -0.05)
 
     ALL_TRUE = True  # True False
@@ -256,15 +256,25 @@ if __name__ == "__main__":
         make_net_d0zr_per_pid = False
         join_net_d0zr_and_iv_matrix = False
         # plot modifiers
-        plot_all_pids_net_d0zr_per_pid_by_tid = True  # compares with model
+        plot_all_pids_net_d0zr_per_pid_by_tid = False  # compares with model
         plot_heatmap_of_all_pids_net_d0zr = False
-        plot_per_pid_net_d0zr_per_pid_by_tid = True  # compares with model
+        plot_per_pid_net_d0zr_per_pid_by_tid = False  # compares with model
         plot_net_d0zr_frequency_sweeps_per_pid = False
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
-        plot_merged_coords_volt_per_pid_by_all_volt_freq = True  # compares with model
+        plot_merged_coords_volt_per_pid_by_all_volt_freq = False  # compares with model
         plot_merged_coords_volt_heat_maps = False
         plot_merged_coords_volt_ascending_only = False  # compares with model
-        plot_zipped_coords_on_model = False  # compares with model
+        plot_zipped_coords_on_model = True  # compares with model
+
+    if '_W13' in TEST_CONFIG:
+        Z_CLIP_SURFACE_PROFILE = -0.85
+    elif '_W5' in TEST_CONFIG:
+        Z_CLIP_SURFACE_PROFILE = -0.05
+    elif '_W11' in TEST_CONFIG:
+        # Z_CLIP_SURFACE_PROFILE = -0.8
+        # SHOULD DOUBLE-CHECK THIS
+        # pass
+        raise ValueError("Make sure you are aware of this before running.")
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW
@@ -369,6 +379,7 @@ if __name__ == "__main__":
         if '_W11' in TEST_CONFIG:
             surf_z = surf_z[surf_r < 620]
             surf_r = surf_r[surf_r < 620]
+            raise ValueError("Make sure you are aware of this before running.")
 
         func_apparent_r_displacement = calculate_apparent_radial_displacement_due_to_rotation(
             surf_r=surf_r,
@@ -378,6 +389,17 @@ if __name__ == "__main__":
             z_clip=Z_CLIP_SURFACE_PROFILE,
             path_save=SAVE_COMBINED_ZC,
         )
+
+        raise ValueError("The above tilt-correction does not take the actual thickness of the membrane into account."
+                         "This can be easily done by also fitting a function to the membrane thickness vs. depth "
+                         "data which is generated from the energy minimization model."
+                         "NOTE: not performing this correction leads to a relatively significant error."
+                         "For example, the thickness of C7-20pT after pre-stretch is ~14 microns. So, "
+                         "using a membrane thickness of 20 microns for the tilt-correction would result in"
+                         "an error of 30%."
+                         "Some specific examples of this error that I can already see in the data:"
+                         "  * W12 C7-20pT: fixing this error would result in much much better agreement."
+                         "  * For the other C7-20pT tests, fixing the error might actually make the agreement worse.")
 
     # ---
 
@@ -579,7 +601,7 @@ if __name__ == "__main__":
         )
 
         # DF_ZC = DF_ZC[(DF_ZC['frame'] < 75) | (DF_ZC['frame'] > 370)]
-        # DF_ZC = DF_ZC[DF_ZC['drg'] < 5]
+        # DF_ZC = DF_ZC[DF_ZC['drg'] < 10]
 
         plotting.compare_corrected_zipped_stretch_with_model(
             df=DF_ZC,

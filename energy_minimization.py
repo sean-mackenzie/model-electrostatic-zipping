@@ -68,6 +68,16 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
     t = dict_geometry['memb_t']
     pre_stretch = dict_geometry['memb_ps']
     t0 = t * pre_stretch ** 2  # dict_geometry['memb_t0']  # You must define t0 this way, otherwise won't work
+
+    ### If you want to vary pre-stretch, while assuming
+    ### a constant t0, then you need to enable below.
+    ### Otherwise, the original thickness t0 will vary.
+    # t0 = dict_geometry['memb_t']
+    # t = t / pre_stretch ** 2
+
+    print("Membrane original thickness, t0: ", t0)
+    print("Membrane thickness at start of zipping, t: ", t)
+
     # Metal
     t_metal = dict_geometry['met_t']  # meters
     t_ps_metal = dict_geometry['met_ps']
@@ -170,18 +180,109 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
     return df
 
 
-def calculate_radial_displacement_by_depth(df):
+def calculate_radial_displacement_by_depth(df, poly_deg, path_save=None, save_id=''):
     df['stretch_due_to_zipping'] = np.sqrt(df['t_i'].iloc[0] / df['t_flat'])
     df['disp_r_microns'] = (df['stretch_due_to_zipping'] - 1) * df['x_flat'] / 2 * 1e6  # divide by 2 = radial displacement
 
-    df['apparent_dr_microns'] = np.sin(np.deg2rad(df['theta_i'])) * df['t_i'] * -1e6
-    df['disp_r_microns_corr'] = df['disp_r_microns'] + df['apparent_dr_microns']
+    df['apparent_dr_microns_discrete'] = np.sin(np.deg2rad(df['theta_i'])) * df['t_i'] * -1e6
+    df['disp_r_microns_corr_discrete'] = df['disp_r_microns'] + df['apparent_dr_microns_discrete']
 
     # The "old" (before 4/14/25) method of calculating these are below. They give identical results
     # But I feel more comfortable using the above approach, which makes more intuitive sense.
     # df['stretch_ratio'] = df['stretch_flat'] / df['stretch_i'].iloc[0]
     # df['disp_r_microns'] = (df['stretch_ratio'] - 1) * df['x_flat'] / 2 * 1e6  # divide by 2 = radial displacement
+
+    # "new" (5/2/2025 and after)
+    df = calculate_apparent_radial_displacement_including_thickness(df, poly_deg, path_save, save_id)
+
     return df
+
+
+def calculate_apparent_radial_displacement_including_thickness(df, poly_deg, path_save=None, save_id=''):
+    x, y = df['dX'].to_numpy(), df['dZ'].to_numpy()
+    # Clip surface profile data to only include the sloped portion
+    #x = x[y < z_clip]
+    #y = y[y < z_clip]
+    # Fit polynomial to surface profile
+    coefficients = np.polyfit(x, y, deg=poly_deg)
+    polynomial = np.poly1d(coefficients)
+    # Derivative of the fitted polynomial is smoothed surface slope
+    polynomial_derivative = polynomial.deriv()
+    df['slope_i_smooth'] = polynomial_derivative(x)
+
+    # inverse tangent of slope gives sidewall angle
+    angle_radians = np.arctan(polynomial_derivative(x))
+    angle_degrees = np.rad2deg(angle_radians)
+    df['theta_i_smooth'] = angle_degrees
+
+    # Apparent radial displacement = membrane thickness + slope angle
+    apparent_displacement = np.sin(angle_radians) * df['t_i'].to_numpy() * -1  # minus sign implies opposite of stretch
+    df['apparent_dr_microns'] = apparent_displacement * 1e6  # convert units to microns
+
+    df.loc[df['dZ'] < 0.1e-6, 'apparent_dr_microns'] = 0
+    # df.loc[df['dZ'] < df['dZ'].min() + df['t_f'].iloc[-1] / 4, 'apparent_dr_microns'] = 0
+
+    df['disp_r_microns_corr'] = df['disp_r_microns'] + df['apparent_dr_microns']
+
+    # plot fitted surface profile to double-check fit is good
+    plot_polynomial_fitted_to_surface_profile(df, x, y, polynomial, polynomial_derivative, poly_deg, path_save, save_id)
+
+    return df
+
+def plot_polynomial_fitted_to_surface_profile(df, x, y, polynomial, polynomial_derivative, poly_deg, path_save=None, save_id=''):
+    # convert data to units/direction that makes intuitive sense with surface profile
+    x_um, y_um = x * 1e6, y * -1e6
+    # get radial min/max position where the correction should actually be applied
+    memb_thickness_at_bottom = 10
+    relative_thicknesses = 0.25
+    tilt_corr_only_up_to = np.min(y_um) + memb_thickness_at_bottom * relative_thicknesses
+    x_applicable = x_um[(y_um < -0.1) & (y_um > tilt_corr_only_up_to)]
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, sharex=True, figsize=(4.5, 6))  # (7, 8)
+    # ax1.scatter(x, y, s=4, alpha=0.95, label='Surface profile')
+    ax1.plot(x_um, y_um, 'k-', label='Surface profile')
+    ax1.plot(x_um, polynomial(x) * -1e6, 'r-', lw=0.85, label=f'{poly_deg}-deg Polynominal')
+    ax2.plot(x_um, polynomial_derivative(x), label='Derivative (Slope)', color='green', linestyle='--')
+    ax3.plot(x_um, df['theta_i_smooth'], label='Angle (degrees)', color='purple')
+    ax4.plot(x_um, -df['apparent_dr_microns'], label='Apparent Displacement', color='orange')
+
+    for ax in [ax1, ax2, ax3, ax4]:
+        ax.grid(alpha=0.15)
+        ax.axvline(x_applicable.min(), color='k', lw=0.5, linestyle='--', alpha=0.15)
+        ax.axvline(x_applicable.max(), color='k', lw=0.5, linestyle='--', alpha=0.15)
+    ax1.axhline(y=tilt_corr_only_up_to, color='k', lw=0.5, linestyle='--', alpha=0.15)
+    ax4.axvline(x_applicable.min(), color='k', lw=0.5, linestyle='--', alpha=0.15,
+                label='rmin={}'.format(np.round(x_applicable.min(), 1)))
+    ax4.axvline(x_applicable.max(), color='k', lw=0.5, linestyle='--', alpha=0.15,
+                label='rmax(t={}um*{})={}'.format(memb_thickness_at_bottom, relative_thicknesses,
+                                                  np.round(x_applicable.max(), 1)))
+
+    ax1.legend(fontsize='x-small')
+    ax2.legend(fontsize='x-small')
+    ax4.legend(fontsize='xx-small', loc='lower right')
+    ax1.set_ylabel(r'$z \: (\mu m)$')
+    ax2.set_ylabel('slope')
+    ax3.set_ylabel('angle (degrees)')
+    ax4.set_ylabel(r'$\Delta_{apparent} r \: (\mu m)$')
+    ax4.set_xlabel(r'$r \: (\mu m)$')
+    plt.tight_layout()
+    if path_save is not None:
+        plt.savefig(join(path_save, f'apparent_radial_displacement_{save_id}.png'),
+                    dpi=300, facecolor='w', bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+
+def get_surface_slope_function(df, poly_deg):
+    # Fit polynomial to surface profile
+    coefficients = np.polyfit(df['dX'].to_numpy(), df['dZ'].to_numpy(), deg=poly_deg)
+    polynomial = np.poly1d(coefficients)
+    # Derivative of the fitted polynomial
+    polynomial_derivative = polynomial.deriv()
+    return polynomial_derivative
+
+
 
 
 def plot_deformation_by_depth(df, path_save, save_id, z_clip=2.5):
@@ -761,7 +862,7 @@ def plot_total_energy_and_minima_by_depth(voltages, df_te_vs, df_dz_vs, path_sav
             ax.legend(fontsize='xx-small')
         axs[-1].set_xlabel('Depth (um)')
         plt.tight_layout()
-        plt.savefig(join(path_save, save_id + f'{voltage}V.png'), dpi=300, facecolor='w', bbox_inches='tight')
+        plt.savefig(join(path_save, save_id + f'_{voltage}V.png'), dpi=300, facecolor='w', bbox_inches='tight')
         plt.close()
 
 
@@ -1033,9 +1134,9 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
 
     if wid == 5:
         if test_config in ['01082025_W5-D1_C9-0pT']:
-            surface_profile_radius_adjust = 0
-            surface_profile_subset = 'left_half'  # 'right_half' 'left_half'
-            tck_smoothing = 28.0
+            surface_profile_radius_adjust = 20
+            surface_profile_subset = 'left_half'
+            tck_smoothing = 20
         elif test_config in ['01272025_W5-D1_C7-20pT']:
             surface_profile_radius_adjust = -10
             surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
@@ -1046,6 +1147,13 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
             surface_profile_radius_adjust = 20
             surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
             tck_smoothing = 1
+        # NOTE: I'm temporarily varying this
+        if test_config in ['01092025_W10-A1_C9-0pT']:
+            # so far like (40, right, 0) best
+            surface_profile_radius_adjust = 40
+            surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
+            tck_smoothing = 0
+            # raise ValueError("This needs to be settled and so needs to be run carefully.")
     elif wid == 11:
         if test_config in ['01122025_W11-B1_C9-0pT', '03072025_W11-A1_C19-30pT_20+10nmAu']:
             surface_profile_radius_adjust = 30
@@ -1065,15 +1173,28 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
             surface_profile_subset = 'average_right_half'
             tck_smoothing = 0.1
     elif wid == 13:
-        if test_config in ['03052025_W13-D1_C19-30pT_20+10nmAu']:
+        if test_config in ['01102025_W13-D1_C9-0pT']:
+            surface_profile_radius_adjust = 35
+            surface_profile_subset = 'left_half'  # 'right_half' 'left_half'
+            tck_smoothing = 8.5
+        elif test_config in ['02242025_W13-D1_C15-15pT_iter2', '02242025_W13-D1_C17-20pT',
+                             '03052025_W13-D1_C19-30pT_20+10nmAu', '03122025_W13-D1_C15-15pT_25nmAu']:
             surface_profile_radius_adjust = 30
-            surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
-            tck_smoothing = 250
+            surface_profile_subset = 'right_half'
+            tck_smoothing = 15
     elif wid == 14:
         if test_config in ['01132025_W14-F1_C9-0pT']:
             surface_profile_radius_adjust = 10
             surface_profile_subset = 'left_half'  # 'right_half' 'left_half'
             tck_smoothing = 25
+        elif test_config in ['01272025_W14-F1_C7-20pT']:
+            surface_profile_radius_adjust = 10
+            surface_profile_subset = 'right_half'
+            tck_smoothing = 0
+    elif wid == 101:
+        surface_profile_radius_adjust = 0
+        surface_profile_subset = 'right_half'
+        tck_smoothing = 0
     else:
         pass
 
@@ -1095,9 +1216,6 @@ def get_surface_profile_settings(wid, test_config, dict_override=None):
         dict_surface.update(dict_override)
 
     return dict_surface
-
-    # -
-
 
 def sweep_formatter(key, values):
     if key == 'memb_E':
@@ -1141,7 +1259,6 @@ def sweep_formatter(key, values):
 
     return values, labels, units
 
-
 def recommended_sweep(memb_id, sweep_key):
     values, measured_idx = None, None
     if sweep_key == 'comp_E':
@@ -1154,6 +1271,9 @@ def recommended_sweep(memb_id, sweep_key):
         elif memb_id in ['C21-15pT-30nmAu', 'C19-30pT-20+10nmAu']:
             values = [5.5, 6.5, 7.5]
             measured_idx = 0
+        elif memb_id in ['C00-0pT-0nmAu']:
+            values = [1, 2.5, 5, 10]
+            measured_idx = 0
     elif sweep_key == 'memb_ps':
         if memb_id in ['C9-0pT-20nmAu']:
             values = [1.0, 1.006, 1.016, 1.026]
@@ -1164,6 +1284,9 @@ def recommended_sweep(memb_id, sweep_key):
         elif memb_id in ['C22-20pT-20nmAu']:
             values = [1.06, 1.08, 1.1, 1.12]
             measured_idx = 1
+        elif memb_id in ['C00-0pT-0nmAu']:
+            values = [1, 1.1, 1.2, 1.3]
+            measured_idx = 0
 
     return values, measured_idx
 
@@ -1171,8 +1294,8 @@ def recommended_sweep(memb_id, sweep_key):
 if __name__ == '__main__':
 
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
-    WID = 14
+    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
+    WID = 10
 
     MEMB_ID = 'C9-0pT-20nmAu'
     USE_MEMB_OR_COMP = 'comp'  # 'memb' or 'comp'
@@ -1182,11 +1305,7 @@ if __name__ == '__main__':
     sweep_values, measured_idx = recommended_sweep(MEMB_ID, sweep_key)
     print(sweep_values)
     if sweep_values is None:
-        sweep_values = [5.5, 6.5, 7.5]  # NOTE: correct units are automatically applied
-        measured_idx = -1
-        raise ValueError()
-
-
+        raise ValueError("No recommended values found.")
     dict_override = {
         # 'surface_profile_radius_adjust': 15,
         # 'surface_profile_subset': 'left_half',  # 'right_half' 'left_half'
@@ -1205,28 +1324,31 @@ if __name__ == '__main__':
     save_sweep = save_id
     save_sweep_value = save_id
     z_clip = 2.5
-    voltages = np.arange(5, 201, 5)
+    voltages = np.arange(5, 221, 5)
     ignore_dZ_below_v = (25e-6, 50)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
+    FIT_SURFACE_POLY_DEG = 4
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
     use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
     export_elastic_energy = True  # True False
     export_all_energy = False
-    export_total_energy = False
+    export_total_energy = True
     # plotting (if None, then do not plot. Otherwise, plot energy by depth for specified voltages)
-    plot_e_by_z_overlay_v = None  # [[30, 40, 50, 60], [40, 80, 120, 160, 200], [150, 175, 200]]
+    plot_e_by_z_overlay_v = None  # [[40, 80, 120, 160, 200], [200, 220, 240, 260]]
     animate_e_by_z_by_v = None  # None or a list of voltages to plot total energy vs depth
-    plot_minima_for_vs = None # [80, 85, 90, 95, 100]  # None or a list of voltages to plot total energy vs depth and first minima
+    plot_minima_for_vs = None  # [20, 40, 80, 120, 160, 200]  # None or a list of voltages to plot total energy vs depth and first minima
     animate_minima_by_z_by_v = None # np.arange(60, 256, 5)  # None or a list of voltages to plot total energy vs depth and first minima
 
     # -
 
     save_volume = join(save_dir, 'volume')
+    save_correction = join(save_dir, 'correction')
     save_elastic = join(save_dir, 'elastic')
     save_electrostatic = join(save_dir, 'electrostatic')
     save_total_energy = join(save_dir, 'total_energy')
     save_energy_minima = join(save_dir, 'energy_minima')
-    pths = [save_volume]
+    save_specific = join(save_dir, 'specific')
+    pths = [save_volume, save_correction]
     if export_elastic_energy:
         pths.append(save_elastic)
     if plot_e_by_z_overlay_v is not None:
@@ -1235,6 +1357,8 @@ if __name__ == '__main__':
         pths.append(save_total_energy)
     if plot_minima_for_vs is not None or animate_minima_by_z_by_v is not None:
         pths.append(save_energy_minima)
+    if np.max(plot_sweep_idx) >= 0:
+        pths.append(save_specific)
     for pth in pths:
         if not os.path.exists(pth):
             os.makedirs(pth)
@@ -1263,7 +1387,7 @@ if __name__ == '__main__':
     df_volume = calculate_zipped_segment_volumes_by_depth(dict_model_solve)
     df_volume.to_excel(join(save_volume, save_id + '_model_volumes.xlsx'), index=False)
 
-    df_strain = calculate_radial_displacement_by_depth(df_volume)
+    df_strain = calculate_radial_displacement_by_depth(df_volume, FIT_SURFACE_POLY_DEG, path_save=save_correction, save_id=save_id)
     df_strain.to_excel(join(save_dir, save_id + '_model_strain-by-z.xlsx'), index=False)
     plot_deformation_by_depth(df_strain, save_dir, save_id + '_model_strain-by-z.png', z_clip)
 
@@ -1284,7 +1408,7 @@ if __name__ == '__main__':
         # --- Only re-solve volumes if sweeping membrane thickness
         if sweep_key in ['memb_t', 'memb_ps', 'met_t', 'met_ps']:
             df_volume = calculate_zipped_segment_volumes_by_depth(dict_model_solve)
-            df_strain = calculate_radial_displacement_by_depth(df_volume)
+            df_strain = calculate_radial_displacement_by_depth(df_volume, FIT_SURFACE_POLY_DEG, path_save=save_correction, save_id=save_id)
             if i in plot_sweep_idx:
                 df_volume.to_excel(join(save_volume, save_id + '_model_volumes.xlsx'), index=False)
                 df_strain.to_excel(join(save_dir, save_id + '_model_strain-by-z.xlsx'), index=False)
@@ -1322,12 +1446,12 @@ if __name__ == '__main__':
         # -
         # Export MASSIVE dataframe with all energy components
         if i in plot_sweep_idx and export_all_energy:
-            df_all_energy_by_voltage.to_excel(join(save_dir, save_id + '_model_all_energy_by_voltage.xlsx'), index=False)
+            df_all_energy_by_voltage.to_excel(join(save_dir, save_specific, save_id + '_model_all_energy_by_voltage.xlsx'), index=False)
         # -
         # Keep only necessary columns
         df_total_energy_by_voltage = df_all_energy_by_voltage[columns_id + outputs_total_energy]
         if i in plot_sweep_idx and export_total_energy:
-            df_total_energy_by_voltage.to_excel(join(save_dir, save_id + '_model_total_energy_by_voltage.xlsx'), index=False)
+            df_total_energy_by_voltage.to_excel(join(save_dir, save_specific, save_id + '_model_total_energy_by_voltage.xlsx'), index=False)
         # -
         # plot total energy
         if i in plot_sweep_idx and plot_e_by_z_overlay_v is not None:
@@ -1363,8 +1487,8 @@ if __name__ == '__main__':
             assign_z=assign_z,
         )
         if i in plot_sweep_idx:
-            df_dZ_by_v.to_excel(join(save_dir, save_id + '_model_z-by-v.xlsx'), index=False)
-            plot_z_by_voltage_by_model(df_dZ_by_v, save_dir, save_id)
+            df_dZ_by_v.to_excel(join(save_dir, save_specific, save_id + '_model_z-by-v.xlsx'), index=False)
+            plot_z_by_voltage_by_model(df_dZ_by_v, join(save_dir, save_specific), save_id)
         # -
         # plot identified first minima on total energy vs depth
         if i in plot_sweep_idx and plot_minima_for_vs is not None:

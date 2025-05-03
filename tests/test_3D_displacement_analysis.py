@@ -39,8 +39,8 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
-    TIDS = [1]  # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
+    TIDS = [1] # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     ONLY_TIDS_WITH_TEST_SETTINGS = True
     IV_ACDC = 'DC'  # 'AC' or 'DC'
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = False  # True False
     EXPORT_NET_D0ZR, AVG_MAX_N = False, 50  # True: export dfd0 to special directory
-    EXPORT_ZIPPED_COORDS = True
+    EXPORT_ZIPPED_COORDS = False
     ZIPPED_ONLY_FRAMES = None
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
-    START_FRAME, END_FRAMES = (1, 25), (410, 450)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
+    START_FRAME, END_FRAMES = (0, 0), (0, 0)  # (a<x<b; NOT: a<=x<=b) only used if test_settings.xlsx not found
 
 
     # ------------------------------------------------------------------------------------------------------------------
