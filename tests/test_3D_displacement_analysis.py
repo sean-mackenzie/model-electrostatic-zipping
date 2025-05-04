@@ -28,7 +28,6 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
             surf_r=surf_r,
             surf_z=surf_z,
         )
-
         df_frame = df_frame[(df_frame[pr] > zipping_interface_r) & (df_frame[pz] > zipping_interface_z)]
         df_frame['zipping_interface_r'] = zipping_interface_r
         df_frame['zipping_interface_z'] = zipping_interface_z

@@ -283,8 +283,6 @@ def get_surface_slope_function(df, poly_deg):
     return polynomial_derivative
 
 
-
-
 def plot_deformation_by_depth(df, path_save, save_id, z_clip=2.5):
     px = 'dZ'
     py1 = 't_flat'
@@ -1294,8 +1292,8 @@ def recommended_sweep(memb_id, sweep_key):
 if __name__ == '__main__':
 
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
-    WID = 10
+    TEST_CONFIG = '01132025_W14-F1_C9-0pT'
+    WID = 14
 
     MEMB_ID = 'C9-0pT-20nmAu'
     USE_MEMB_OR_COMP = 'comp'  # 'memb' or 'comp'
@@ -1324,9 +1322,9 @@ if __name__ == '__main__':
     save_sweep = save_id
     save_sweep_value = save_id
     z_clip = 2.5
-    voltages = np.arange(5, 221, 5)
+    voltages = np.arange(5, 181, 5)
     ignore_dZ_below_v = (25e-6, 50)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
-    FIT_SURFACE_POLY_DEG = 4
+    FIT_SURFACE_POLY_DEG = 9
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
     use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
