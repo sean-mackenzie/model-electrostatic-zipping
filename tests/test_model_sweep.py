@@ -3,12 +3,10 @@
 # imports
 from os.path import join
 import numpy as np
-import pandas as pd
-from scipy.special import erf
 import matplotlib.pyplot as plt
 
-from utils import energy, plotting, shapes
-from model_energy_minimization import legacy_solve_energy_iterative_shape_function
+from utils import shapes
+from archived.old_model_energy_minimization import legacy_solve_energy_iterative_shape_function
 
 
 # functions: plotting

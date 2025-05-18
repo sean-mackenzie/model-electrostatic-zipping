@@ -215,7 +215,7 @@ def get_joined_net_d0zr_and_iv_matrix(df_net_d0zr_per_pid, df_iv_matrix, base_di
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01082025_W5-D1_C9-0pT'
+    TEST_CONFIG = ''
 
     # Model params
     VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
@@ -223,14 +223,14 @@ if __name__ == "__main__":
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -110  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -80  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     FREQ_SWEEP_POLY_DEG = 2  # If None, then polynominal degree will be one less than number of frequencies
     read_model_data = True
-    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 4
+    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 9
     Z_CLIP_SURFACE_PROFILE = -0.125  # -0.125 for most; (W11: -0.8; W13: -0.85; W5: -0.05)
 
-    ALL_TRUE = True  # True False
+    ALL_TRUE = False  # True False
     if ALL_TRUE:
         make_ivac_matrix = True
         make_ivac_matrix_combinations = True
@@ -253,18 +253,18 @@ if __name__ == "__main__":
         make_ivac_matrix_combinations = False
         make_merged_coords_volt = False
         make_zipped_coords = False
-        make_net_d0zr_per_pid = False
-        join_net_d0zr_and_iv_matrix = False
+        make_net_d0zr_per_pid = True
+        join_net_d0zr_and_iv_matrix = True
         # plot modifiers
-        plot_all_pids_net_d0zr_per_pid_by_tid = False  # compares with model
-        plot_heatmap_of_all_pids_net_d0zr = False
-        plot_per_pid_net_d0zr_per_pid_by_tid = False  # compares with model
-        plot_net_d0zr_frequency_sweeps_per_pid = False
+        plot_all_pids_net_d0zr_per_pid_by_tid = True  # compares with model
+        plot_heatmap_of_all_pids_net_d0zr = True
+        plot_per_pid_net_d0zr_per_pid_by_tid = True  # compares with model
+        plot_net_d0zr_frequency_sweeps_per_pid = True
         plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
         plot_merged_coords_volt_per_pid_by_all_volt_freq = False  # compares with model
         plot_merged_coords_volt_heat_maps = False
         plot_merged_coords_volt_ascending_only = False  # compares with model
-        plot_zipped_coords_on_model = True  # compares with model
+        plot_zipped_coords_on_model = False  # compares with model
 
     if '_W13' in TEST_CONFIG:
         Z_CLIP_SURFACE_PROFILE = -0.85
@@ -301,6 +301,7 @@ if __name__ == "__main__":
     FN_ALL_ZIPPED_COORDS = 'all_zipped_coords.xlsx'
     FN_ALL_NET_D0ZR_PER_PID = 'all_net-d0zr_per_pid.xlsx'
     FN_JOINED_MERGED_COORDS_VOLT_AND_IV_MATRIX = 'joined_merged-coords-volt_and_iv_matrix.xlsx'
+    FN_JOINED_MERGED_COORDS_VOLT_AND_IV_MATRIX_ASC_ONLY = 'joined_merged-coords-volt_and_iv_matrix_ascending-only.xlsx'
     FN_JOINED_NET_D0ZR_AND_IV_MATRIX = 'joined_net-d0zr_and_iv_matrix.xlsx'
     # filepaths
     FP_IV_MATRIX = join(SAVE_COMBINED, FN_IV_MATRIX)
@@ -599,6 +600,7 @@ if __name__ == "__main__":
             base_dir=BASE_DIR,
             save_dir=SAVE_COMBINED,
         )
+        raise ValueError("The above tilt-correction does not take the actual thickness of the membrane into account.")
 
         # DF_ZC = DF_ZC[(DF_ZC['frame'] < 75) | (DF_ZC['frame'] > 370)]
         # DF_ZC = DF_ZC[DF_ZC['drg'] < 10]

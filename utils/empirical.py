@@ -1,3 +1,4 @@
+from os.path import join
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -56,6 +57,19 @@ def dict_from_tck(wid, fid, depth, radius, units, num_segments, fp_tck, r_min=No
     }
 
     return dict_fid
+
+def plot_final_tck_profile(px, py, save_id, save_dir):
+    fig, ax = plt.subplots(figsize=(5, 3))
+    ax.plot(px * 1e3, py * 1e6, label=np.round(np.min(py * 1e6), 1))
+    ax.set_xlabel('mm')
+    ax.set_ylabel('um')
+    ax.grid(alpha=0.25)
+    ax.legend(title='Depth (um)')
+    ax.set_title('dz/segment = {} um ({} segs)'.format(np.round(np.min(py * 1e6) / len(px), 2), len(px)))
+    plt.suptitle(save_id)
+    plt.tight_layout()
+    plt.savefig(join(save_dir, save_id + '_profile.png'), facecolor='w')
+    plt.close()
 
 
 # --- SURFACE PROFILES
@@ -179,8 +193,18 @@ def get_zipping_interface_r_from_z(z0, surf_r, surf_z, z0_max=-0.01):
     # Use these indices to sort both arrays
     sorted_r = surf_r[sorted_indices]
     sorted_z = surf_z[sorted_indices]
-    # find smallest r that satisfies
-    rmin_nearest = sorted_r[np.argmax(np.abs(sorted_z - z0) < 2)]
+
+    # find smallest r where condition (surface z and z0 are within 2 microns) is satisfied
+    # 1. check condition
+    boolean_surf_z_around_z0 = np.abs(sorted_z - z0) < 2
+    if z0 > np.max(surf_z) and np.all(~boolean_surf_z_around_z0):
+        # 2. if condition is not satisfied and z0 near surface level, set r to maximum radius
+        ## NOTE: this may result in an unrealistic r (i.e., way out on the flat) but the z should be correct
+        rmin_nearest = np.max(surf_r)
+    else:
+        # 3. if condition is satisfied, return the smallest r that satisfies the condition
+        # OR, if condition is not satisfied but z0 < max(surf_z) (e.g., 100% pull-in), then return smallest r
+        rmin_nearest = sorted_r[np.argmax(boolean_surf_z_around_z0)]
     return rmin_nearest
 
 
@@ -209,9 +233,8 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
     )
     try:
         # 2nd-pass: refine zipping interface
-        r_fringing = np.percentile(r[r < zipping_interface_r], 75)
-        # r_midpoint = (zipping_interface_r + np.min(r)) / 2
-        zipping_interface_z = np.mean(z[(r < zipping_interface_r) & (r > r_fringing)])
+        r_fringing = np.percentile(r[r < zipping_interface_r], 75)  # get particles nearest (r) the surface
+        zipping_interface_z = np.mean(z[(r < zipping_interface_r) & (r > r_fringing - 0.025)])  # z of particles nearest surface
         zipping_interface_r = get_zipping_interface_r_from_z(
             z0=zipping_interface_z,
             surf_r=surf_r,
@@ -219,6 +242,17 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
         )
     except IndexError:
         pass
+
+    # 3rd pass: if some particles are below the surface profile, take percentile of those near through-hole
+    if np.min(z) < np.min(surf_z):
+        # NOTE: this percentile might give an error if there aren't any particles that meet the condition
+        z_near_sidewall = np.percentile(z[(r > np.min(surf_r) - 50) & (z < zipping_interface_z)], 30)
+        zipping_interface_z = np.max([np.min(surf_z), z_near_sidewall])
+        zipping_interface_r = get_zipping_interface_r_from_z(
+            z0=zipping_interface_z,
+            surf_r=surf_r,
+            surf_z=surf_z,
+        )
     return zipping_interface_r, zipping_interface_z
 
 

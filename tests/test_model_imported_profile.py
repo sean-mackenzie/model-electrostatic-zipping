@@ -5,12 +5,11 @@ import os
 from os.path import join
 import numpy as np
 import pandas as pd
-from scipy.special import erf
 import matplotlib.pyplot as plt
 
-from utils import energy, plotting, shapes
+from utils import shapes
 from utils.empirical import dict_from_tck
-from model_energy_minimization import solve_energy_iterative_shape_function
+from archived.old_model_energy_minimization import solve_energy_iterative_shape_function
 
 
 def plot_sweep_z_by_v(df_roots, key, vals, path_save, save_id, key_title=None):

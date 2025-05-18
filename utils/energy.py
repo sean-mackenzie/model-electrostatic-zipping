@@ -39,12 +39,17 @@ def mechanical_energy_density_metal_3D(E, nu, l):
     return 0.5 * (E / (1 - nu**2)) * strain_metal**2
 
 def bending_energy_per_unit_area_metal(E, nu, t, curvature):
-    """ Probably not useful and/or correct. """
+    """ Bending energy per unit area. """
     # Bending energy in metal (only)
     D_metal = E * t**3 / (12 * (1 - nu**2))  # Bending stiffness
     U_bending = D_metal * curvature**2  # per unit area
     return U_bending
 
+def bending_energy_density(E, nu, t, curvature):
+    """ Bending energy density is the same as bending energy per unit area. """
+    D = E * t**3 / (12 * (1 - nu**2))  # Bending stiffness
+    U_bending = D * curvature**2  # per unit area
+    return U_bending
 
 
 def calculate_stretched_thickness(original_thickness, stretch_factor):

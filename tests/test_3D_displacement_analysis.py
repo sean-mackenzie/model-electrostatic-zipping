@@ -9,7 +9,28 @@ import smu, awg, dpt
 from utils import settings, analyses, plotting, empirical
 
 
-def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
+def get_zipping_interface_up_to_pull_in(df, include_extra_frames=4, within_percent_max_dz=2):
+    arr1 = df['frame'].to_numpy()
+    arr2 = df['zipping_interface_z'].to_numpy()
+    # primary sort: r
+    sorted_indices = np.argsort(arr1)
+    # Use these indices to sort both arrays
+    sorted1 = arr1[sorted_indices]
+    sorted2 = arr2[sorted_indices]
+    pull_in_earliest_frame = sorted1[np.argmax(np.abs(sorted2 - np.min(arr2)) < np.abs(np.min(arr2)) * within_percent_max_dz / 100)]
+    # -
+    df = df[df['frame'] <= pull_in_earliest_frame + include_extra_frames]
+    return df
+
+
+def calculate_zipping_interface(df, przdr, dict_surf, acdc, frames=None):
+    if acdc == 'DC':
+        keep_cols = ['frame', 't_sync', 'SOURCE_TIME_MIDPOINT', 'STEP', 'VOLT', 'CURR', 'TIMESTAMP']
+    elif acdc == 'AC':
+        keep_cols = ['frame', 't_sync', 'SOURCE_TIME_MIDPOINT', 'STEP', 'VOLT',
+                     'TIMESTAMP_DAQ_HANDLER', 'MONITOR_TIME_MIDPOINT', 'MONITOR_VALUE']
+    else:
+        raise ValueError("Invalid acdc: {}".format(acdc))
     # initialize variables
     pr, pz, pdr = przdr
     surf_r, surf_z = dict_surf['r'] + dict_surf['dr'], dict_surf['z'] + dict_surf['dz']
@@ -19,6 +40,7 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
         frames.sort()
     # -
     df_frames = []
+    df_zipping_interface = []
     for frame in frames:
         df_frame = df[df['frame'] == frame].sort_values(pr)
 
@@ -28,25 +50,51 @@ def calculate_zipping_interface(df, przdr, dict_surf, frames=None):
             surf_r=surf_r,
             surf_z=surf_z,
         )
+
+        # if you want to plot to double-check algorithm
+        """
+        if frame > 100:
+            fig, ax = plt.subplots(figsize=(10, 10))
+            ax.scatter(df_frame[pr], df_frame[pz], c='k', s=7)
+            ax.plot(surf_r, surf_z, '-', color='gray', lw=2, label='SP', zorder=3.1)
+            ax.axhline(zipping_interface_z, 0, 1, ls='--', color='gray', lw=0.95, alpha=0.25, zorder=3.0)
+            ax.axvline(zipping_interface_r, 0, 1, ls='--', color='gray', lw=0.95, alpha=0.25, zorder=3.0)
+            ax.set_title('Frame: {}'.format(frame))
+            plt.show()
+            plt.close()
+            a = 1
+        """
+
+        # pure position of the zipping interface, with additional details useful for plotting
+        df_zip = df_frame[keep_cols].groupby('frame').mean().reset_index()
+        df_zip['zipping_interface_r'] = zipping_interface_r
+        df_zip['zipping_interface_z'] = zipping_interface_z
+        df_zipping_interface.append(df_zip)
+
+        # particles that are on the sidewall, above and outside of the zipping interface
         df_frame = df_frame[(df_frame[pr] > zipping_interface_r) & (df_frame[pz] > zipping_interface_z)]
         df_frame['zipping_interface_r'] = zipping_interface_r
         df_frame['zipping_interface_z'] = zipping_interface_z
         df_frames.append(df_frame)
+
     df_frames = pd.concat(df_frames)
-    return df_frames
+    df_zipping_interface = pd.concat(df_zipping_interface)
+    return df_frames, df_zipping_interface
+
+# ---
 
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01092025_W10-A1_C9-0pT'
-    TIDS = [1] # np.arange(3, 15)  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '01122025_W12-D1_C9-0pT'
+    TIDS = [1]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     ONLY_TIDS_WITH_TEST_SETTINGS = True
     IV_ACDC = 'DC'  # 'AC' or 'DC'
 
     # ---
 
     ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
-    ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots
+    ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots and zipped coords
     # -
     # SETTINGS (True False)
     UPDATE_DEPENDENT = False  # True: update all dependent settings in dict_settings.xlsx
@@ -58,13 +106,16 @@ if __name__ == "__main__":
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = False  # True False
-    EXPORT_NET_D0ZR, AVG_MAX_N = False, 50  # True: export dfd0 to special directory
-    EXPORT_ZIPPED_COORDS = False
+    AVG_MAX_N = 0  # Gets used by both EXPORT_NET_D0ZR and SECOND_PASS
+    EXPORT_NET_D0ZR = False  # True: export dfd0 to special directory
+    EXPORT_ZIPPED_COORDS = True
+    EXPORT_ZIPPING_INTERFACE = True
+    PLOT_ZIPPING_INTERFACE, AND_SAVE = True, True  # Only plots if EXPORT_ZIPPING_INTERFACE is True
     ZIPPED_ONLY_FRAMES = None
     # -
     # ALTERNATIVE IS TO USE INITIAL COORDS
     EXPORT_INITIAL_COORDS = False  # False True
-    D0F_IS_TID = 1  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
+    D0F_IS_TID = 0  # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND
     DROP_PIDS = []  # []: remove bad particles from ALL coords
     # -
     # ONLY USED IF DICT_TID{}_SETTINGS.XLSX IS NOT FOUND **AND** IV_ACDC == 'DC'
@@ -106,6 +157,7 @@ if __name__ == "__main__":
         FN_COORDS_STARTS_WITH = 'test_coords_t'
         FN_COORDS_SAVE = 'tid{}_coords.xlsx'.format(TID)
         FN_COORDS_SAVE_ZIPPED = 'tid{}_zipped_coords.xlsx'.format(TID)
+        FN_SAVE_ZIPPING_INTERFACE = 'tid{}_zipping_interface.xlsx'.format(TID)
         FN_COORDS_INITIAL_SAVE = 'tid{}_init_coords.xlsx'.format(TID)
         # FN_COORDS_INITIAL_READ = 'tid{}_init_coords.xlsx'.format(D0F_IS_TID)
         # -
@@ -356,15 +408,54 @@ if __name__ == "__main__":
 
         # ---
         # EXPORT COORDINATES OF ONLY "ZIPPED" POSITIONS"
-        if EXPORT_ZIPPED_COORDS:
-            DF_ZIPPED = calculate_zipping_interface(
+        if EXPORT_ZIPPED_COORDS or EXPORT_ZIPPING_INTERFACE or PLOT_ZIPPING_INTERFACE:
+            DF_ZIPPED_COORDS, DF_ZIP_INTERFACE = calculate_zipping_interface(
                 df=DF,
                 przdr=ANIMATE_RZDR,
                 dict_surf=analyses.get_surface_profile_dict(DICT_SETTINGS),
+                acdc=IV_ACDC,
                 frames=ZIPPED_ONLY_FRAMES,
             )
-            if len(DF_ZIPPED) > 0:
-                DF_ZIPPED.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE_ZIPPED), index=False)
+            if EXPORT_ZIPPED_COORDS and len(DF_ZIPPED_COORDS) > 0:
+                DF_ZIPPED_COORDS.to_excel(join(SAVE_COORDS, FN_COORDS_SAVE_ZIPPED), index=False)
+            if EXPORT_ZIPPING_INTERFACE and len(DF_ZIP_INTERFACE) > 0:
+                DF_ZIP_INTERFACE.to_excel(join(SAVE_COORDS, FN_SAVE_ZIPPING_INTERFACE), index=False)
+            if PLOT_ZIPPING_INTERFACE:
+                df = DF_ZIP_INTERFACE
+                include_extra_frames = 4
+                within_percent_max_dz = 2
+                # ---
+                df_pull_in = get_zipping_interface_up_to_pull_in(df, include_extra_frames, within_percent_max_dz)
+                dfg_mean = df_pull_in.groupby('VOLT').mean().reset_index()
+                dfg_min = df_pull_in.groupby('VOLT').min().reset_index()
+
+                fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(3.75, 3.75))
+                ax1.plot(df['VOLT'], df['zipping_interface_z'], '--', lw=0.75, color='gray', alpha=0.5)
+                ax1.plot(df['VOLT'], df['zipping_interface_z'], 'k.', ms=1, label='Zipping Interface')
+                ax1.set_ylabel('{} '.format(ANIMATE_RZDR[1]) + r'$(\mu m)$')
+                ax1.grid(alpha=0.125)
+                ax1.legend(fontsize='x-small')
+                ax1.set_title(f'{TEST_CONFIG}: TID{TID}', fontsize='small')
+
+                ax2.plot(df_pull_in['VOLT'], df_pull_in['zipping_interface_z'], 'k.', ms=1, alpha=0.35, label=f'pull-in+{include_extra_frames}frames')
+                ax2.plot(dfg_mean['VOLT'], dfg_mean['zipping_interface_z'], '-', lw=0.6, color='tab:blue', alpha=0.75, label='mean(volt)')
+                ax2.plot(dfg_min['VOLT'], dfg_min['zipping_interface_z'], '-', lw=0.6, color='tab:red', alpha=0.75, label='min(volt)')
+                ax2.set_ylabel(r'$z_{interface, avg}$')
+                ax2.grid(alpha=0.125)
+                ax2.legend(fontsize='xx-small')
+                ax2.set_xlabel('V (V)')
+                plt.tight_layout()
+                if AND_SAVE:
+                    if not os.path.exists(PATH_REPRESENTATIVE.format(TID)):
+                        os.makedirs(PATH_REPRESENTATIVE.format(TID))
+                    try:
+                        fig.savefig(join(PATH_REPRESENTATIVE.format(TID), 'tid{}_zipping_interface.png'.format(TID)),
+                                    dpi=300, bbox_inches='tight', facecolor='w')
+                    except FileNotFoundError:
+                        print("Directory not found: {}".format(
+                            join(PATH_REPRESENTATIVE.format(TID), 'tid{}_zipping_interface.png'.format(TID))))
+                plt.show()
+                plt.close(fig)
 
         # ---
         # SECOND-PASS EVALUATION

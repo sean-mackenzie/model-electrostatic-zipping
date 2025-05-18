@@ -48,6 +48,7 @@ def get_df_model_strain(dict_settings):
 
     return df_model_VdZ, df_model_strain
 
+
 def get_surface_profile_dict(dict_settings):
     if 'fid_process_profile' in dict_settings.keys():
         surf_fid_override = dict_settings['fid_process_profile']
@@ -166,16 +167,16 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     eval_pids_drz = True  # True: calculate/export net-displacement per-particle in r- and z-directions
     average_max_n_positions = average_max_n
     # -
-    plot_all_pids_by_X, Xs = False, ['frame', 't_sync', 'STEP', 'VOLT']
-    plot_heatmaps = False  # True: plot 2D heat map (requires eval_pids_dz having been run)
+    plot_all_pids_by_X, Xs = True, ['frame', 't_sync', 'STEP', 'VOLT']
+    plot_heatmaps = True  # True: plot 2D heat map (requires eval_pids_dz having been run)
     # --- --- PIDS
     plot_single_pids_by_frame = False  # If you have voltage data, generally False. Can be useful to align by "frame" (not time)
-    plot_pids_by_synchronous_time_voltage = False
-    plot_pids_by_synchronous_time_voltage_monitor = False  # AC only
+    plot_pids_by_synchronous_time_voltage = True
+    plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
     plot_quiver_xy_by_frame = False
-    plot_1D_dz_by_r_by_frame_with_surface_profile = False
+    plot_1D_dz_by_r_by_frame_with_surface_profile = True
     show_zipping_interface = True
     dr_ampl = 1
     fit_spline_to_memb = False
