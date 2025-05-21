@@ -218,16 +218,16 @@ if __name__ == "__main__":
     TEST_CONFIG = ''
 
     # Model params
-    VMAX = 200  # if VMAX is lower than model's Vmax, then do nothing
+    VMAX = 600  # if VMAX is lower than model's Vmax, then do nothing
 
     # Other params
     ONLY_TEST_TYPES = ['STD1', 'STD2', 'STD3', 'VAR3', '1', '2', '3', 1, 2, 3]
     ONLY_PIDS = None # if None, will plot all pids or defer to dz quantile threshold
-    THRESHOLD_PIDS_BY_D0Z = -80  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
+    THRESHOLD_PIDS_BY_D0Z = -25  # recommend: 90% of maximum deflection (or, 90% of chamber depth)
     MIN_TIDS_PER_COMBINATION = 3
     FREQ_SWEEP_POLY_DEG = 2  # If None, then polynominal degree will be one less than number of frequencies
     read_model_data = True
-    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 9
+    POLY_DEG_CORRECT_RADIAL_DISPLACEMENT = 12
     Z_CLIP_SURFACE_PROFILE = -0.125  # -0.125 for most; (W11: -0.8; W13: -0.85; W5: -0.05)
 
     ALL_TRUE = False  # True False
@@ -253,17 +253,17 @@ if __name__ == "__main__":
         make_ivac_matrix_combinations = False
         make_merged_coords_volt = False
         make_zipped_coords = False
-        make_net_d0zr_per_pid = True
-        join_net_d0zr_and_iv_matrix = True
+        make_net_d0zr_per_pid = False
+        join_net_d0zr_and_iv_matrix = False
         # plot modifiers
         plot_all_pids_net_d0zr_per_pid_by_tid = True  # compares with model
         plot_heatmap_of_all_pids_net_d0zr = True
         plot_per_pid_net_d0zr_per_pid_by_tid = True  # compares with model
         plot_net_d0zr_frequency_sweeps_per_pid = True
-        plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = False
-        plot_merged_coords_volt_per_pid_by_all_volt_freq = False  # compares with model
-        plot_merged_coords_volt_heat_maps = False
-        plot_merged_coords_volt_ascending_only = False  # compares with model
+        plot_merged_coords_volt_parametric_sweeps_per_pid_by_tid = True
+        plot_merged_coords_volt_per_pid_by_all_volt_freq = True  # compares with model
+        plot_merged_coords_volt_heat_maps = True
+        plot_merged_coords_volt_ascending_only = True  # compares with model
         plot_zipped_coords_on_model = False  # compares with model
 
     if '_W13' in TEST_CONFIG:
@@ -271,10 +271,10 @@ if __name__ == "__main__":
     elif '_W5' in TEST_CONFIG:
         Z_CLIP_SURFACE_PROFILE = -0.05
     elif '_W11' in TEST_CONFIG:
-        # Z_CLIP_SURFACE_PROFILE = -0.8
+        Z_CLIP_SURFACE_PROFILE = -0.8
         # SHOULD DOUBLE-CHECK THIS
         # pass
-        raise ValueError("Make sure you are aware of this before running.")
+        # raise ValueError("Make sure you are aware of this before running.")
 
     # ------------------------------------------------------------------------------------------------------------------
     # YOU SHOULD NOT NEED TO CHANGE BELOW

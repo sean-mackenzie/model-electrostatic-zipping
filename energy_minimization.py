@@ -201,13 +201,6 @@ def get_surface_profile_settings(wid, test_config, dict_override=None, use_radia
             surface_profile_radius_adjust = 20
             surface_profile_subset = 'right_half' # 'right_half'  # 'right_half' 'left_half'
             tck_smoothing = 1
-        # NOTE: I'm temporarily varying this
-        if test_config in ['01092025_W10-A1_C9-0pT']:
-            # so far like (40, right, 0) best
-            surface_profile_radius_adjust = 40
-            surface_profile_subset = 'right_half'  # 'right_half' 'left_half'
-            tck_smoothing = 0
-            raise ValueError("This needs to be settled and so needs to be run carefully.")
     elif wid == 11:
         if test_config in ['01122025_W11-B1_C9-0pT', '03072025_W11-A1_C19-30pT_20+10nmAu']:
             surface_profile_radius_adjust = 30
@@ -217,7 +210,7 @@ def get_surface_profile_settings(wid, test_config, dict_override=None, use_radia
         if test_config in ['01122025_W12-D1_C9-0pT']:
             surface_profile_radius_adjust = 15
             surface_profile_subset = 'average_right_half'
-            tck_smoothing = 12
+            tck_smoothing = 5  # 5: gives scallop-dependent deflection; 12 (old): too smooth for other discussions
         elif test_config in ['01282025_W12-D1_C7-20pT']:
             surface_profile_radius_adjust = 0
             surface_profile_subset = 'average_right_half'
@@ -377,37 +370,40 @@ if __name__ == '__main__':
     if sweep_values is None:
         raise ValueError("No recommended values found.")
     plot_sweep_idx = [measured_idx]  # plot these sweep values (by index)
-    use_radial_displacement_settings = True
-    SAVE_SUB_DIR = USE_MEMB_OR_COMP + '_sweep_' + sweep_key + '_ss_radial-displacement'
+    use_radial_displacement_settings = False
+    SAVE_SUB_DIR = USE_MEMB_OR_COMP + '_sweep_' + sweep_key + '_energy_landscape'
+    dict_override = None #  {'tck_smoothing': 6.5}
 
     # --- --- SOLVER SEQUENCE
 
     save_id, save_dir, dict_model_solve = set_up_model(TEST_CONFIG, WID, MEMB_ID, USE_MEMB_OR_COMP,
-                                                       ROOT_DIR, SAVE_SUB_DIR, dict_override=None,
+                                                       ROOT_DIR, SAVE_SUB_DIR, dict_override=dict_override,
                                                        use_radial_displacement_settings=use_radial_displacement_settings)
     sweep_values, sweep_labels, sweep_units = sweep_formatter(sweep_key, sweep_values)
     save_sweep = save_id
     save_sweep_value = save_id
     z_clip = 2.5
-    voltages = np.arange(5, 251, 1)
-    ignore_dZ_below_v = (23e-6, 44)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
+    voltages = np.arange(5, 131, 1)
+    ignore_dZ_below_v = (20e-6, 50)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
     use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
     export_elastic_energy = True  # True False
-    export_all_energy = False
-    export_total_energy = False
+    export_all_energy = True
+    export_total_energy = True
     # plotting (if None, then do not plot. Otherwise, plot energy by depth for specified voltages)
-    plot_e_by_z_overlay_v = None  # [[40, 80, 120, 160, 200], [200, 220, 240, 260]]
+    plot_e_by_z_overlay_v = [[60, 70, 80, 90, 100, 110],]  # [[40, 80, 120, 160, 200], [150, 160, 170, 180], [200, 220, 240]]
     animate_e_by_z_by_v = None  # None or a list of voltages to plot total energy vs depth
-    plot_minima_for_vs = None  # [20, 40, 80, 120, 160, 200]  # None or a list of voltages to plot total energy vs depth and first minima
+    plot_minima_for_vs = [60, 70, 80, 90, 100, 110]  # [60, 75, 100] # None or a list of voltages to plot total energy vs depth and first minima
     animate_minima_by_z_by_v = None # np.arange(60, 256, 5)  # None or a list of voltages to plot total energy vs depth and first minima
     # -
     if WID == 5:
         FIT_SURFACE_POLY_DEG = 5
     elif WID == 10:
         FIT_SURFACE_POLY_DEG = 5
-    elif WID == 14:
+    elif WID == 12:
+        FIT_SURFACE_POLY_DEG = 15
+    elif WID in [14, 13]:
         FIT_SURFACE_POLY_DEG = 10
     else:
         raise ValueError('WID not recognized or appropriate settings not yet determined.')

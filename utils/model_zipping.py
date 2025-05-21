@@ -872,7 +872,10 @@ def plot_total_energy_and_minima_by_depth(voltages, df_te_vs, df_dz_vs, path_sav
         fig, axs = plt.subplots(nrows=len(pys), figsize=(4, len(pys) * 2), sharex=True)
         for ax, py, pz in zip(axs, pys, pzs):
             # z of first minima
+            #try:
             y_dZ = df_dz_vs.loc[df_dz_vs[pv] == voltage, pz].values[0]
+            #except IndexError:
+            #    continue
             # total energy of first minima
             te_dZ = df[py].iloc[(df[px] - y_dZ).abs().idxmin()]
             ax.plot(x, df[py], label=py)
@@ -967,7 +970,7 @@ def plot_sweep_z_by_voltage_by_model(df, key, labels, units, save_dir, save_id):
 
     for ax, py in zip(axs, pys):
         for sv, lbl in zip(svs, labels):
-            df_sv = df[df[sweep_key] == sv]
+            df_sv = df[df[key] == sv]
             ax.plot(df_sv[pv], df_sv[py] * 1e6 * -1, label=lbl)
         ax.text(0.95, 0.95, py, color='black', fontsize=8,
                  horizontalalignment='right', verticalalignment='top', transform=ax.transAxes)
@@ -977,7 +980,7 @@ def plot_sweep_z_by_voltage_by_model(df, key, labels, units, save_dir, save_id):
     axs[lgnd_idx].legend(fontsize='x-small', title=lgnd_title, title_fontsize='x-small')
     axs[-1].set_xlabel('Voltage (V)')
     plt.tight_layout()
-    plt.savefig(join(save_dir, save_id + f'_model_z-by-v-by-model_sweep-{sweep_key}.png'),
+    plt.savefig(join(save_dir, save_id + f'_model_z-by-v-by-model_sweep-{key}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
 
 def plot_sweep_z_by_voltage_comp_E(df, key, labels, units, save_dir, save_id):
@@ -992,11 +995,12 @@ def plot_sweep_z_by_voltage_comp_E(df, key, labels, units, save_dir, save_id):
 
     fig, ax = plt.subplots(figsize=(3.3, 2.625))
     for sv, lbl in zip(svs, labels):
-        df_sv = df[df[sweep_key] == sv]
+        df_sv = df[df[key] == sv]
         ax.plot(df_sv[pv], df_sv[py] * 1e6 * -1, label=lbl)
     ax.set_ylabel(r'$z \: (\mu m)$')
     ax.legend(fontsize='x-small', title=lgnd_title, title_fontsize='x-small', loc='upper right', frameon=False)
     ax.set_xlabel('Voltage (V)')
+    ax.grid(alpha=0.25)
     plt.tight_layout()
-    plt.savefig(join(save_dir, save_id + f'_z-by-v-by-compE_sweep-{sweep_key}.png'),
+    plt.savefig(join(save_dir, save_id + f'_z-by-v-by-compE_sweep-{key}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')

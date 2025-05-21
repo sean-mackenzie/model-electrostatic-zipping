@@ -86,10 +86,10 @@ def calculate_zipping_interface(df, przdr, dict_surf, acdc, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '01122025_W12-D1_C9-0pT'
-    TIDS = [1]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '03072025_W11-A1_C19-30pT_20+10nmAuX'
+    TIDS = [39]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     ONLY_TIDS_WITH_TEST_SETTINGS = True
-    IV_ACDC = 'DC'  # 'AC' or 'DC'
+    IV_ACDC = 'AC'  # 'AC' or 'DC'
 
     # ---
 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     SECOND_PASS = False  # True False
     AVG_MAX_N = 0  # Gets used by both EXPORT_NET_D0ZR and SECOND_PASS
     EXPORT_NET_D0ZR = False  # True: export dfd0 to special directory
-    EXPORT_ZIPPED_COORDS = True
+    EXPORT_ZIPPED_COORDS = False
     EXPORT_ZIPPING_INTERFACE = True
     PLOT_ZIPPING_INTERFACE, AND_SAVE = True, True  # Only plots if EXPORT_ZIPPING_INTERFACE is True
     ZIPPED_ONLY_FRAMES = None

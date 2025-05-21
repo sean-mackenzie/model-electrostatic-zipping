@@ -245,14 +245,30 @@ def get_zipping_interface_rz(r, z, surf_r, surf_z):
 
     # 3rd pass: if some particles are below the surface profile, take percentile of those near through-hole
     if np.min(z) < np.min(surf_z):
+        do_other = True
         # NOTE: this percentile might give an error if there aren't any particles that meet the condition
-        z_near_sidewall = np.percentile(z[(r > np.min(surf_r) - 50) & (z < zipping_interface_z)], 30)
-        zipping_interface_z = np.max([np.min(surf_z), z_near_sidewall])
-        zipping_interface_r = get_zipping_interface_r_from_z(
-            z0=zipping_interface_z,
-            surf_r=surf_r,
-            surf_z=surf_z,
-        )
+        try:
+            z_near_sidewall = np.percentile(z[(r > np.min(surf_r) - 50) & (z < zipping_interface_z)], 30)
+        except IndexError:
+            """ Only use on case-by-case basis """
+            zipping_interface_z = np.min(z)  # np.min(surf_z)
+            zipping_interface_r = np.min(r)  # np.min(surf_r)
+            do_other = False
+
+            fig, ax = plt.subplots(figsize=(5, 3))
+            ax.plot(surf_r, surf_z, 'k-')
+            ax.plot(r, z, 'ro')
+            ax.set_title(f"Z.I.(z): {zipping_interface_z}")
+            plt.show()
+
+            raise ValueError()
+        if do_other:
+            zipping_interface_z = np.max([np.min(surf_z), z_near_sidewall])
+            zipping_interface_r = get_zipping_interface_r_from_z(
+                z0=zipping_interface_z,
+                surf_r=surf_r,
+                surf_z=surf_z,
+            )
     return zipping_interface_r, zipping_interface_z
 
 
