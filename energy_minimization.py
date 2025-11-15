@@ -6,13 +6,14 @@ import pandas as pd
 from utils import empirical, settings, materials
 from utils.empirical import dict_from_tck, plot_final_tck_profile
 from tests.test_manually_fit_tck_to_surface_profile import manually_fit_tck
-from utils import model_zipping
+from utils import model_zipping, fit
 
 
 # ------------------- WAFER + MEMBRANE SETTINGS
 
 def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid, save_sub_dir,
-                                                     dict_override=None, use_radial_displacement_settings=False):
+                                                     dict_override=None, use_radial_displacement_settings=False,
+                                                     fid_override=None):
 
     base_dir = join(root_dir, test_config)
     dict_surface = get_surface_profile_settings(wid, test_config, dict_override, use_radial_displacement_settings)
@@ -22,7 +23,10 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
     fp_settings = join(read_settings, 'dict_settings.xlsx')
     dict_settings = settings.get_settings(fp_settings=fp_settings, name='settings', update_dependent=False)
     fid_process_profile = dict_settings['fid_process_profile']
-    fid = fid_process_profile
+    if fid_override is not None:
+        fid = fid_override
+    else:
+        fid = fid_process_profile
     dict_settings_radius = dict_settings['radius_microns']
     include_through_hole = True
     df_surface = empirical.read_surface_profile(
@@ -65,21 +69,35 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
         'num_points': num_points,
         'degree': degree,
     }
-    # export tck
+
+    # export tck and profile
     df_tck = pd.DataFrame(np.vstack([tck[0], tck[1]]).T, columns=['t', 'c'])
     df_tck_settings = pd.DataFrame.from_dict(data=dict_tck_settings, orient='index', columns=['v'])
     with pd.ExcelWriter(fp_tck) as writer:
-        for sheet_name, df, idx, idx_lbl in zip(['tck', 'settings'], [df_tck, df_tck_settings], [False, True], [None, 'k']):
+        for sheet_name, df, idx, idx_lbl in zip(['tck', 'settings'],
+                                                [df_tck, df_tck_settings],
+                                                [False, True],
+                                                [None, 'k']):
             df.to_excel(writer, sheet_name=sheet_name, index=idx, index_label=idx_lbl)
+
     dict_fid = dict_from_tck(wid, fid, depth, surface_profile_radius, units, dict_surface['num_segments'], fp_tck, rmin)
     # FID, DEPTH, SURFACE_PROFILE_RADIUS, UNITS, NUM_SEGMENTS, fp_tck=FP_TCK, r_min=rmin
     # profile to model
     px, py = dict_fid['r'], dict_fid['z']
-    profile_x, profile_y = px, py
 
-    # ALWAYS PLOT THE PROFILE!!!
-    # if not os.path.exists(join(read_tck, save_id + '_profile.png')):
+    # always plot the profile
     plot_final_tck_profile(px=px, py=py, save_id=save_id, save_dir=read_tck)
+
+    # export tck and profile (again, but with all the data for reference)
+    # df_tck = pd.DataFrame(np.vstack([tck[0], tck[1]]).T, columns=['t', 'c'])
+    df_rz_post_tck = pd.DataFrame(np.vstack([px, py]).T, columns=['r', 'z'])
+    # df_tck_settings = pd.DataFrame.from_dict(data=dict_tck_settings, orient='index', columns=['v'])
+    with pd.ExcelWriter(fp_tck) as writer:
+        for sheet_name, df, idx, idx_lbl in zip(['tck', 'sp_post_tck', 'sp_input', 'settings'],
+                                                [df_tck, df_rz_post_tck, df_surface, df_tck_settings],
+                                                [False, False, False, True],
+                                                [None, None, None, 'k']):
+            df.to_excel(writer, sheet_name=sheet_name, index=idx, index_label=idx_lbl)
 
     dict_surface.update({
         'depth_um': dict_fid['depth'],
@@ -88,27 +106,28 @@ def set_up_model_directories_and_get_surface_profile(root_dir, test_config, wid,
         'radius': dict_fid['radius'] * 1e-6,
         'r': dict_fid['r'],
         'z': dict_fid['z'],
-    }) # # , profile_x, profile_y
+    })
 
     return save_id, save_dir, dict_surface
 
-
 def set_up_model(test_config, wid, memb_id, use_memb_or_comp, root_dir, save_sub_dir,
-                 dict_override=None, use_radial_displacement_settings=False):
+                 dict_override=None, use_radial_displacement_settings=False, config='MoB', fid_override=None):
     # set up model directories and get surface profile
     save_id, path_save_dir, dict_surf = set_up_model_directories_and_get_surface_profile(
-        root_dir, test_config, wid, save_sub_dir, dict_override, use_radial_displacement_settings,
+        root_dir, test_config, wid, save_sub_dir, dict_override, use_radial_displacement_settings, fid_override,
     )
     # get membrane settings
     dict_memb = materials.get_membrane_settings(memb_id)
     # stack all settings into a single dictionary
     dict_model_settings = {
         'test_config': test_config,
+        'config': config,
         'wid': wid,
         'memb_id': memb_id,
         'save_id': save_id,
         'save_dir': path_save_dir,
     }
+
     dict_model_settings.update(dict_surf)
     dict_model_settings.update(dict_memb)
     # save settings
@@ -131,6 +150,7 @@ def set_up_model(test_config, wid, memb_id, use_memb_or_comp, root_dir, save_sub
         raise ValueError('use_memb_or_comp must be "memb" or "comp"')
 
     dict_geometry = {
+        'config': dict_model_settings['config'],
         'shape': dict_surf['shape'],
         'radius': dict_surf['radius'],
         'profile_x': dict_surf['r'],
@@ -143,6 +163,7 @@ def set_up_model(test_config, wid, memb_id, use_memb_or_comp, root_dir, save_sub
     }
     dict_mechanical = {
         'memb_E': dict_memb['memb_E'],
+        'memb_eps_r': dict_memb['memb_eps_r'],
         'memb_J': dict_memb['memb_J'],
         'met_E': dict_memb['met_E'],
         'met_nu': dict_memb['met_nu'],
@@ -158,10 +179,9 @@ def set_up_model(test_config, wid, memb_id, use_memb_or_comp, root_dir, save_sub
 
     return save_id, path_save_dir, dict_model_solve
 
-
 def get_surface_profile_settings(wid, test_config, dict_override=None, use_radial_displacement_settings=False):
     shape = 'circle'
-    surface_dielectric_eps_r = 3.9
+    surface_dielectric_eps_r = 3.9  # Thermal SiO2
     surface_dielectric_surface_roughness = 1e-9
     surface_dielectric_thickness = 2e-6
     num_segments = 2000
@@ -251,6 +271,13 @@ def get_surface_profile_settings(wid, test_config, dict_override=None, use_radia
         surface_profile_radius_adjust = 0
         surface_profile_subset = 'right_half'
         tck_smoothing = 0
+    elif wid == 18:
+        surface_profile_radius_adjust = 35 + 0  # +35 is perfect to include entry step profile
+        surface_profile_subset = 'left_half'
+        tck_smoothing = 0
+        surface_dielectric_thickness = 0.52e-6  # This is True only for MoT characterizations before 10/2023
+        # NOTE: for MoT, 'surface_dielectric_thickness' and 'surface_dielectric_eps_r' will be overridden
+        # NOTE: surface_dielectric_eps_r = 2.8 for SILPURAN and ELASTOSIL
     else:
         pass
 
@@ -315,7 +342,7 @@ def sweep_formatter(key, values):
 
     return values, labels, units
 
-def recommended_sweep(memb_id, sweep_key):
+def recommended_sweep(memb_id, sweep_key, config):
     values, measured_idx = None, None
     if sweep_key == 'comp_E':
         if memb_id in ['C9-0pT-20nmAu', 'C7-20pT-20nmAu', 'C22-20pT-20nmAu']:
@@ -328,8 +355,12 @@ def recommended_sweep(memb_id, sweep_key):
             values = [5.5, 6.5, 7.5]
             measured_idx = 0
         elif memb_id in ['C00-0pT-0nmAu']:
-            values = [1, 2.5, 5, 10]
+            values = np.array([5, 10, 20, 50, 75, 100, 150, 200]) / 5  # [1, 5, 10, 15, 25, 40]
             measured_idx = 0
+        elif memb_id in ['MoT1-20um-20pT-15nmAu', 'MoT1-200um-20pT-15nmAu',
+                         'MoT2-20um-0pT-15nmAu', 'MoT3-20um-5pT-15nmAu']:
+            values = [1, 2.9, 5.55, 10, 20]
+            measured_idx = 1
     elif sweep_key == 'memb_ps':
         if memb_id in ['C9-0pT-20nmAu']:
             values = [1.0, 1.006, 1.016, 1.026]
@@ -341,14 +372,35 @@ def recommended_sweep(memb_id, sweep_key):
             values = [1.06, 1.08, 1.1, 1.12]
             measured_idx = 1
         elif memb_id in ['C00-0pT-0nmAu']:
-            values = [1, 1.1, 1.2, 1.3]
+            values = [1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35]
             measured_idx = 0
+        elif memb_id in ['MoT1-20um-20pT-15nmAu', 'MoT1-200um-20pT-15nmAu']:
+            values = [1.006, 1.04, 1.0795, 1.1, 1.2, 1.3]
+            measured_idx = 2
+        elif memb_id in ['MoT2-20um-0pT-15nmAu']:
+            values = [1, 1.00785, 1.1, 1.2, 1.3] # [1.005, 1.00785, 1.01, 1.015]
+            measured_idx = 1
+        elif memb_id in ['MoT3-20um-5pT-15nmAu']:
+            values = [1.0, 1.0015, 1.00785, 1.0213]
+            measured_idx = 3
     elif sweep_key == 'memb_J':
-        values = [25, 50, 75, 100]
+        values = [1, 2.5, 25, 100]
         measured_idx = 1
     elif sweep_key == 'sd_t':
-        values = [1.8, 2, 2.2, 2.4]
-        measured_idx = 1
+        if memb_id in ['MoT1-20um-20pT-15nmAu', 'MoT1-200um-20pT-15nmAu',
+                         'MoT2-20um-0pT-15nmAu', 'MoT3-20um-5pT-15nmAu'] and config == 'MoT':
+            values = [10, 15, 20, 100, 150, 200]
+            measured_idx = 2
+        else:
+            values = [0.25, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
+            measured_idx = 4
+    elif sweep_key == 'memb_t':
+        if memb_id == 'C00-0pT-0nmAu':
+            values = [5, 10, 20, 50, 75, 100, 150, 200]
+            measured_idx = 3
+    elif sweep_key == 'sd_eps_r':
+        values = [1.0, 2.8, 3.9, 7.5, 9.0, 25.0, 95.0]
+        measured_idx = 2
 
     return values, measured_idx
 
@@ -356,55 +408,77 @@ def recommended_sweep(memb_id, sweep_key):
 if __name__ == '__main__':
 
     ROOT_DIR = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation'
-    TEST_CONFIG = '01132025_W14-F1_C9-0pTx'
-    WID = 14
+    TEST_CONFIG = '01122025_W11-B1_C9-0pTx'
+    WID = 11
 
-    MEMB_ID = 'C9-0pT-20nmAu' # 'C9-0pT-20nmAu' 'C7-20pT-20nmAu' 'C22-20pT-20nmAu' 'C15-15pT-25nmAu' 'C19-30pT-20+10nmAu'
+    MEMB_ID = 'C9-0pT-20nmAu'
+    # 'C00-0pT-0nmAu', 'MoT1-20um-20pT-15nmAu', 'MoT1-200um-20pT-15nmAu', 'MoT2-20um-0pT-15nmAu', 'MoT3-20um-5pT-15nmAu'
+    # # 'C9-0pT-20nmAu' 'C7-20pT-20nmAu' 'C22-20pT-20nmAu' 'C15-15pT-25nmAu' 'C19-30pT-20+10nmAu'
     USE_MEMB_OR_COMP = 'comp'  # 'memb' or 'comp'
+    config = 'MoB'  # True: set (1) sd_t (effective) = sd_t + memb_t, and (2) sd_eps_r = 2.8 (Elastosil/Silpuran)
 
     # Set up configurations to iterate through
-    sweep_key = 'comp_E'  # 'comp_E', 'memb_E', 'met_E', 'memb_t', 'memb_ps', 'sd_t', 'sd_eps_r', 'memb_J'
-    sweep_values, measured_idx = recommended_sweep(MEMB_ID, sweep_key)
-    # sweep_values = [1, 5, 10, 25]
+    sweep_key = 'comp_E'  # 'comp_E', 'memb_ps', 'sd_t', 'memb_t'
+    sweep_values, measured_idx = recommended_sweep(MEMB_ID, sweep_key, config)
+    # sweep_values = [1, 2, 3.7, 7, 10, 15, 25]
+    # measured_idx = 2
+    # sweep_values = sweep_values[:2]
+
     print(sweep_values)
     if sweep_values is None:
         raise ValueError("No recommended values found.")
-    plot_sweep_idx = [measured_idx]  # plot these sweep values (by index)
-    use_radial_displacement_settings = False
-    SAVE_SUB_DIR = USE_MEMB_OR_COMP + '_sweep_' + sweep_key + '_energy_landscape'
-    dict_override = None #  {'tck_smoothing': 6.5}
-
+    plot_sweep_idx = [measured_idx]  # [0, 1, 2, 3] #; plot these sweep values (by index)
+    use_radial_displacement_settings = False  # TODO: add a note here explaining what this modifier does.
+    # SAVE_SUB_DIR = config + '_' + USE_MEMB_OR_COMP + '_sweep_' + sweep_key + '_test_fid=0'
+    dict_override = {'tck_smoothing': 15, 'surface_profile_radius_adjust': -40} # None #  {'tck_smoothing': 6.5}
+    fid_override = None  # None (use what's in settings), or, 0, 1, 2, 3, etc.
+    SAVE_SUB_DIR = f'{config}_{USE_MEMB_OR_COMP}_sweep_{sweep_key}_scaling'
+    if TEST_CONFIG == '010120205_W101-A1_RepresentativeExample':
+        if fid_override == 4:
+            dict_override = {'surface_profile_radius_adjust': 225}
+        elif fid_override == 5:
+            dict_override = {'surface_profile_radius_adjust': 500}
+            # 1725
     # --- --- SOLVER SEQUENCE
 
     save_id, save_dir, dict_model_solve = set_up_model(TEST_CONFIG, WID, MEMB_ID, USE_MEMB_OR_COMP,
                                                        ROOT_DIR, SAVE_SUB_DIR, dict_override=dict_override,
-                                                       use_radial_displacement_settings=use_radial_displacement_settings)
+                                                       use_radial_displacement_settings=use_radial_displacement_settings,
+                                                       config=config, fid_override=fid_override)
     sweep_values, sweep_labels, sweep_units = sweep_formatter(sweep_key, sweep_values)
     save_sweep = save_id
     save_sweep_value = save_id
-    z_clip = 2.5
-    voltages = np.arange(5, 131, 1)
-    ignore_dZ_below_v = (20e-6, 50)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
+    z_clip = 5.0
+    voltages = np.arange(5, 1301, 1)  # np.hstack([np.arange(10, 40, 10), np.arange(40, 1005, 20)])
+    ignore_dZ_below_v = (5e-6, 40)  # ignore dZ > dZ.max() - VAR1, if voltage < VAR2
     assign_z = 'z_comp'  # options: 'z_memb', 'z_mm', 'z_comp'
     use_neo_hookean = False
     # export intermediate analyses (i.e., energy parts per volume)
-    export_elastic_energy = True  # True False
-    export_all_energy = True
-    export_total_energy = True
+    export_elastic_energy = False  # True False
+    export_all_energy = False
+    export_total_energy = False
     # plotting (if None, then do not plot. Otherwise, plot energy by depth for specified voltages)
-    plot_e_by_z_overlay_v = [[60, 70, 80, 90, 100, 110],]  # [[40, 80, 120, 160, 200], [150, 160, 170, 180], [200, 220, 240]]
-    animate_e_by_z_by_v = None  # None or a list of voltages to plot total energy vs depth
-    plot_minima_for_vs = [60, 70, 80, 90, 100, 110]  # [60, 75, 100] # None or a list of voltages to plot total energy vs depth and first minima
-    animate_minima_by_z_by_v = None # np.arange(60, 256, 5)  # None or a list of voltages to plot total energy vs depth and first minima
+    use_values = None  # None or a list of voltages to plot total energy vs depth
+    plot_e_by_z_overlay_v = use_values  # List of lists, like: [[40, 80, 120, 160, 200], [150, 160, 170, 180], [200, 220, 240]]
+    animate_e_by_z_by_v = use_values
+    plot_minima_for_vs = use_values
+    animate_minima_by_z_by_v = use_values
     # -
     if WID == 5:
         FIT_SURFACE_POLY_DEG = 5
     elif WID == 10:
         FIT_SURFACE_POLY_DEG = 5
-    elif WID == 12:
+    elif WID in [12, 11]:
         FIT_SURFACE_POLY_DEG = 15
     elif WID in [14, 13]:
         FIT_SURFACE_POLY_DEG = 10
+    elif WID == 18:
+        FIT_SURFACE_POLY_DEG = 10
+    elif WID == 101:
+        if fid_override == 4:
+            FIT_SURFACE_POLY_DEG = 12
+        else:
+            FIT_SURFACE_POLY_DEG = 1
     else:
         raise ValueError('WID not recognized or appropriate settings not yet determined.')
     # -
@@ -445,7 +519,10 @@ if __name__ == '__main__':
         'Em_flat_i_memb', 'Em_flat_i_metal', 'Em_flat_i_mm', 'Em_flat_i_comp',
         'Em_tot_i_memb', 'Em_tot_i_metal', 'Em_tot_i_mm', 'Em_tot_i_comp',
     ]
-    inputs_electrostatic = ['sa_i']
+    if dict_model_solve['config'] == 'MoT':
+        inputs_electrostatic = ['sa_i', 't_i']
+    else:
+        inputs_electrostatic = ['sa_i']
     outputs_total_energy = ['U', 'E_tot_i_memb', 'E_tot_i_mm', 'E_tot_i_comp']
 
     # ---
@@ -466,6 +543,8 @@ if __name__ == '__main__':
     # ------------------- # ------------------- ITERATE CONFIGURATIONS AND SOLVE
 
     df_dZ_by_v_by_E = []
+    df_all_energy_at_pullin_by_sweep = []
+    arr_thickness_pss = []
     ii = np.arange(len(sweep_values))
     for i, sweep_value, sweep_label in zip(ii, sweep_values, sweep_labels):
         save_id = save_sweep_value + '_{}_{}{}'.format(sweep_key, sweep_label, sweep_units)
@@ -483,6 +562,12 @@ if __name__ == '__main__':
                 df_volume.to_excel(join(save_volume, save_id + '_model_volumes.xlsx'), index=False)
                 df_strain.to_excel(join(save_dir, save_id + '_model_strain-by-z.xlsx'), index=False)
                 model_zipping.plot_deformation_by_depth(df_strain, save_dir, save_id + '_model_strain-by-z.png', z_clip)
+            thickness_i = df_strain['t_i'].iloc[0] * 1e6
+            stretch_i = df_strain['stretch_i'].iloc[0]
+            thickness_f = df_strain['t_flat'].iloc[-1] * 1e6
+            stretch_f = df_strain['stretch_flat'].iloc[-1]
+            arr_thickness_ps = [sweep_label, thickness_i, stretch_i, thickness_f, stretch_f]
+            arr_thickness_pss.append(arr_thickness_ps)
 
         # -
 
@@ -502,10 +587,18 @@ if __name__ == '__main__':
             dict_model_solve,
             voltages,
         )
+
         # plot electrostatic energy
         if i in plot_sweep_idx and plot_e_by_z_overlay_v is not None:
             for k, vo in enumerate(plot_e_by_z_overlay_v):
                 # This is the only plot that needs the MASSIVE dataframe
+                model_zipping.plot_es_em_energy_derivatives_by_depth(
+                    df_all_energy_by_voltage,
+                    vo,
+                    save_electrostatic,
+                    save_id + f'_energies_by_V_group{k}.png',
+                    z_clip,
+                )
                 model_zipping.plot_electrostatic_energy_by_depth_overlay_by_voltage(
                     df_all_energy_by_voltage,
                     vo,
@@ -526,6 +619,13 @@ if __name__ == '__main__':
         # plot total energy
         if i in plot_sweep_idx and plot_e_by_z_overlay_v is not None:
             for k, vo in enumerate(plot_e_by_z_overlay_v):
+                model_zipping.plot_total_energy_derivatives_by_depth(
+                    df_total_energy_by_voltage,
+                    vo,
+                    save_total_energy,
+                    save_id + f'_{k}',
+                    z_clip,
+                )
                 model_zipping.plot_total_energy_by_depth_overlay_by_voltage(
                     df_total_energy_by_voltage,
                     vo,
@@ -583,10 +683,19 @@ if __name__ == '__main__':
 
         # -
 
+        # Keep all energy data at the voltage where pull-in first occurred
+        df_dZ_by_v_pullin = df_dZ_by_v[df_dZ_by_v['z'] > df_dZ_by_v['z'].max() - 1e-6]
+        first_index = df_dZ_by_v_pullin.index[0]
+        df_all_energy_at_pullin = df_all_energy_by_voltage[(df_all_energy_by_voltage['U'] == df_dZ_by_v_pullin['U'].min()) &
+                                                           (df_all_energy_by_voltage['step'] == df_all_energy_by_voltage['step'].max())]
+
         # ------------------- END SOLVE ONE CONFIGURATION
 
         df_dZ_by_v[sweep_key] = sweep_value
         df_dZ_by_v_by_E.append(df_dZ_by_v)
+
+        df_all_energy_at_pullin[sweep_key] = sweep_value
+        df_all_energy_at_pullin_by_sweep.append(df_all_energy_at_pullin)
 
     # ------------------- # ------------------- END ITERATE CONFIGURATIONS AND SOLVE
 
@@ -596,6 +705,27 @@ if __name__ == '__main__':
     df_dZ_by_v_by_E.to_excel(join(save_dir, save_sweep + '_model_z-by-v.xlsx'), index=False)
     model_zipping.plot_sweep_z_by_voltage_by_model(df_dZ_by_v_by_E, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
     model_zipping.plot_sweep_z_by_voltage_comp_E(df_dZ_by_v_by_E, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
+
+    if len(sweep_values) > 3:
+        df_all_energy_at_pullin_by_sweep = pd.concat(df_all_energy_at_pullin_by_sweep)
+        df_all_energy_at_pullin_by_sweep.to_excel(join(save_dir, save_sweep + '_model_energy-at-pullin.xlsx'), index=False)
+        model_zipping.plot_sweep_energy_at_pull_in(df_all_energy_at_pullin_by_sweep, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
+
+        # plot power law fit
+        model_zipping.plot_power_law_fit(df_all_energy_at_pullin_by_sweep, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
+
+        # plot initial and final thickness and stretch if sweep_key in ['memb_t', 'memb_ps', 'met_t', 'met_ps']
+        # arr_thickness_ps = [sweep_key, sweep_value, thickness_i, stretch_i, thickness_f, stretch_f]
+        if len(arr_thickness_pss) > 2:
+            df_t_ps = pd.DataFrame(arr_thickness_pss, columns=[sweep_key, 'thickness_i', 'stretch_i', 'thickness_f', 'stretch_f'])
+            #key = 'thickness'
+            #labels = ['initial', 'final']
+            #units = ['m', 'm']
+            #save_id = save_sweep + '_{}_{}_{}_{}'.format(key, labels[0], units[0], labels[1], units[1])
+            model_zipping.plot_thickness_and_stretch_state(df_t_ps, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
+
+            if sweep_key == 'memb_ps':
+                model_zipping.plot_pre_stretch_scaling_fit(df_all_energy_at_pullin_by_sweep, sweep_key, sweep_labels, sweep_units, save_dir, save_sweep)
 
 
 

@@ -14,6 +14,9 @@ def capacitance_surface_roughness(eps_r, A, d, R0):
 
 
 def electrostatic_energy_density_SR(eps_r, A, d, U, R0):
+    """ NOTE: This function is poorly named. This function returns the
+    electrostatic energy... not the electrostatic energy density.
+    Electrostatic energy density = 1/2 * eps_r * (U/d)^2 (energy per unit volume)"""
     if R0 == 0:
         R0 = 1e-9
     return -0.5 * U ** 2 * capacitance_surface_roughness(eps_r, A, d, R0)
@@ -28,10 +31,12 @@ def mechanical_energy_density_NeoHookean(mu, l):
     I1 = 2 * l**2 + 1 / l**4
     return 0.5 * mu * (I1 - 3)
 
+
 def mechanical_energy_density_metal(E, nu, l):
     """ Strain energy in metal (linear elasticity; plane stress, biaxial strain) """
     strain_metal = l - 1
     return (E / (1 - nu)) * strain_metal**2
+
 
 def mechanical_energy_density_metal_3D(E, nu, l):
     """ Strain energy in metal (linear elasticity; plane strain) """

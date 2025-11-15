@@ -4,13 +4,17 @@ import os
 from os.path import join
 import numpy as np
 import pandas as pd
+from scipy.signal import savgol_filter
+from scipy.interpolate import InterpolatedUnivariateSpline
+
 
 from utils.shapes import surface_area, perimeter
 from utils.energy import mechanical_energy_density_Gent, mechanical_energy_density_NeoHookean, electrostatic_energy_density_SR
 from  utils.energy import mechanical_energy_density_metal, mechanical_energy_density_metal_3D
-from utils import empirical, settings, materials
-from utils.empirical import dict_from_tck
-from tests.test_manually_fit_tck_to_surface_profile import manually_fit_tck
+# from utils import empirical, settings, materials
+# from utils.empirical import dict_from_tck
+# from tests.test_manually_fit_tck_to_surface_profile import manually_fit_tck
+from utils.fit import fit_power_law_scaling, fit_pre_stretch_scaling, neo_hookean_tension_model
 
 import matplotlib.pyplot as plt
 # Customize the property cycle to include both colors and line styles
@@ -74,6 +78,12 @@ def calculate_zipped_segment_volumes_by_depth(dict_geometry):
     ### Otherwise, the original thickness t0 will vary.
     # t0 = dict_geometry['memb_t']
     # t = t / pre_stretch ** 2
+    ####
+    #### NOTE: I no longer think the above is correct (it's only correct for original PS = 1.0)
+    #### I actually think the below is correct but requires manually entering in thickness.
+    #### I don't think this is 100% correct though b/c the way comp_ps is calculated.
+    #t0 = 20e-6  # dict_geometry['memb_t']
+    #t = t0 / pre_stretch ** 2
 
     print("Membrane original thickness, t0: ", t0)
     print("Membrane thickness at start of zipping, t: ", t)
@@ -475,12 +485,19 @@ def calculate_electrostatic_energy_by_depth_for_voltage(df, dict_electrostatic, 
           segments as a function of depth.
     :rtype: pandas.DataFrame
     """
+    config = dict_electrostatic['config']
+    memb_eps_r = dict_electrostatic['memb_eps_r']
     sd_eps_r = dict_electrostatic['sd_eps_r']
     sd_t = dict_electrostatic['sd_t']
     sd_sr = dict_electrostatic['sd_sr']
 
     # Electrostatic energy of zipped segment at each dZ
-    df['Es_seg_i'] = electrostatic_energy_density_SR(eps_r=sd_eps_r, A=df['sa_i'], d=sd_t, U=voltage, R0=sd_sr)
+    if config == 'MoB':
+        df['Es_seg_i'] = electrostatic_energy_density_SR(eps_r=sd_eps_r, A=df['sa_i'], d=sd_t, U=voltage, R0=sd_sr)
+    elif config == 'MoT':
+        df['Es_seg_i'] = electrostatic_energy_density_SR(eps_r=memb_eps_r, A=df['sa_i'], d=df['t_i'], U=voltage, R0=sd_sr)
+    else:
+        raise ValueError('Invalid configuration for electrostatic energy calculation.')
     # Total electrostatic energy of all zipped segments as a function of dZ (sum: 0 to dZ)
     df['Es_seg_sum_i'] = df['Es_seg_i'].cumsum()
 
@@ -618,6 +635,82 @@ def plot_electrostatic_energy_by_depth_overlay_by_voltage(df, voltages, path_sav
     plt.savefig(join(path_save, save_id), dpi=300, facecolor='w', bbox_inches='tight')
     plt.close()
 
+def plot_es_em_energy_derivatives_by_depth(df, voltages, path_save, save_id, z_clip=2.5):
+    px = 'dZ'
+    pv = 'U'
+    py1 = 'Em_tot_i_comp'
+    py2 = 'Es_seg_sum_i'
+    py3 = 'E_tot_i_comp'
+
+    df = df[df[px] < df[px].max() - z_clip * 1e-6]
+
+    fig, axs = plt.subplots(nrows=3, ncols=len(voltages), figsize=(len(voltages) * 3.125, 6), sharex=True)
+
+    for i, voltage in enumerate(voltages):
+        df_v = df[df[pv] == voltage]
+        x, y1, y2, y3 = df_v[px] * 1e6, df_v[py1] * 1e6, df_v[py2] * 1e6, df_v[py3] * 1e6
+
+        lw = 0.5
+        use_interp = False
+        for y, k, clr in zip([y1, y2, y3], ['EM', 'ES', 'Total'], ['r', 'b', 'g']):
+            if use_interp:
+                # Create a spline interpolation of the data
+                spl = InterpolatedUnivariateSpline(x, y, k=3)  # k=3 for cubic spline
+
+                # Generate smoother x points if needed
+                smoother = 50
+                x_smooth = np.linspace(min(x), max(x), smoother)
+
+                # Calculate derivatives
+                y_smooth = spl(x_smooth)
+                dy_dx = spl.derivative(1)(x_smooth)  # First derivative
+                d2y_dx2 = spl.derivative(2)(x_smooth)  # Second derivative
+            else:
+                # Apply Savitzky-Golay filter for smoothing
+                window_length = min(15, len(y) - 2)  # Must be odd and less than data points
+                if window_length % 2 == 0:  # Ensure it's odd
+                    window_length -= 1
+                polyorder = 3
+                y_smooth = savgol_filter(y, window_length, polyorder)
+                # Calculate derivatives
+                dy_dx = np.gradient(y_smooth, x)
+                d2y_dx2 = np.gradient(dy_dx, x)
+
+            axs[0, i].plot(x, y, '-k', lw=lw, label=f'raw')
+            if use_interp:
+                axs[0, i].plot(x_smooth, y_smooth, ls='-', color=clr, lw=lw, label=k)
+                # Plot first derivative
+                axs[1, i].plot(x_smooth, dy_dx, ls='-', color=clr, ms=1, lw=lw)
+                # Plot second derivative
+                axs[2, i].plot(x_smooth, d2y_dx2, ls='-', color=clr, ms=1, lw=lw)
+            else:
+                axs[0, i].plot(x, y_smooth, ls='-', color=clr, lw=lw, label=k)
+                # Plot first derivative
+                axs[1, i].plot(x, dy_dx, ls='-', color=clr, ms=1, lw=lw)
+                # Plot second derivative
+                axs[2, i].plot(x, d2y_dx2, ls='-', color=clr, ms=1, lw=lw)
+
+        axs[0, i].set_title(f'{voltage} V')
+
+    axs[0, 0].legend(fontsize='xx-small')
+    axs[0, 0].set_ylabel(r'Energy, $\Pi \: (\mathrm{\mu J})$')
+    axs[-1, 0].set_xlabel('Depth (um)')
+
+    # axs[1, i].set_title('First Derivative (dy/dx)')
+    axs[1, 0].set_ylabel(r'$d\Pi/dx = G_{\mathrm{zip}}$')
+    #axs[2, i].set_title('Second Derivative (d²y/dx²)')
+    axs[2, 0].set_ylabel(r'$d^2\Pi/dx^2 = dG_{\mathrm{zip}}/dx$')  # d²y/dx²
+
+    for i in [1, 2]:
+        for j in range(len(voltages)):
+            axs[i, j].set_ylim([-0.008, 0.008])
+
+    for ax in axs.flatten():
+        ax.grid(alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(join(path_save, 'derivatives_' + save_id + '.png'), dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
 
 def plot_total_energy_by_depth(df, path_save, save_id, z_clip=2.5):
     px = 'dZ'
@@ -666,6 +759,79 @@ def plot_total_energy_by_depth_overlay_by_voltage(df, voltages, path_save, save_
     plt.close()
 
 
+def plot_total_energy_derivatives_by_depth(df, voltages, path_save, save_id, z_clip=2.5):
+    px = 'dZ'
+    pv = 'U'
+    py = 'E_tot_i_comp'
+
+    df = df[df[px] < df[px].max() - z_clip * 1e-6]
+
+    fig, axs = plt.subplots(nrows=3, ncols=len(voltages), figsize=(len(voltages) * 3.125, 6), sharex=True)
+
+    for i, voltage in enumerate(voltages):
+        df_v = df[df[pv] == voltage]
+        x, y = df_v[px] * 1e6, df_v[py] * 1e6
+
+        use_interp = False
+        if use_interp:
+            # Create a spline interpolation of the data
+            spl = InterpolatedUnivariateSpline(x, y, k=3)  # k=3 for cubic spline
+
+            # Generate smoother x points if needed
+            smoother = 50
+            x_smooth = np.linspace(min(x), max(x), smoother)
+
+            # Calculate derivatives
+            y_smooth = spl(x_smooth)
+            dy_dx = spl.derivative(1)(x_smooth)  # First derivative
+            d2y_dx2 = spl.derivative(2)(x_smooth)  # Second derivative
+        else:
+            # Apply Savitzky-Golay filter for smoothing
+            window_length = min(15, len(y) - 2)  # Must be odd and less than data points
+            if window_length % 2 == 0:  # Ensure it's odd
+                window_length -= 1
+            polyorder = 3
+            y_smooth = savgol_filter(y, window_length, polyorder)
+            # Calculate derivatives
+            dy_dx = np.gradient(y_smooth, x)
+            d2y_dx2 = np.gradient(dy_dx, x)
+
+        axs[0, i].plot(x, y, 'k-', lw=0.75, label=f'raw')
+        if use_interp:
+            axs[0, i].plot(x_smooth, y_smooth, 'r--', lw=0.75, label=f'smooth {smoother}')
+            # Plot first derivative
+            axs[1, i].plot(x_smooth, dy_dx, '-o', ms=1, lw=0.75)
+            # Plot second derivative
+            axs[2, i].plot(x_smooth, d2y_dx2, '-o', ms=1, lw=0.75)
+        else:
+            axs[0, i].plot(x, y_smooth, 'b--', lw=0.75, label=f'Savgold: {window_length}')
+            # Plot first derivative
+            axs[1, i].plot(x, dy_dx, lw=0.75)
+            # Plot second derivative
+            axs[2, i].plot(x, d2y_dx2, lw=0.75)
+
+        axs[0, i].set_title(f'{voltage} V')
+
+    axs[0, 0].legend(fontsize='xx-small')
+    axs[0, 0].set_ylabel(r'Energy, $\Pi \: (\mathrm{\mu J})$')
+    axs[-1, 0].set_xlabel('Depth (um)')
+
+    # axs[1, i].set_title('First Derivative (dy/dx)')
+    axs[1, 0].set_ylabel(r'$d\Pi/dx = G_{\mathrm{zip}}$')
+    #axs[2, i].set_title('Second Derivative (d²y/dx²)')
+    axs[2, 0].set_ylabel(r'$d^2\Pi/dx^2 = dG_{\mathrm{zip}}/dx$')  # d²y/dx²
+
+    for i in [1, 2]:
+        for j in range(len(voltages)):
+            axs[i, j].set_ylim([-0.008, 0.008])
+
+    for ax in axs.flatten():
+        ax.grid(alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(join(path_save, 'derivatives_' + save_id + '.png'), dpi=300, facecolor='w', bbox_inches='tight')
+    plt.close()
+
+
 def plot_normalized_total_energy_by_depth_by_voltage_overlay_by_model(df, voltages, path_save, save_id, z_clip=2.5):
     px = 'dZ'
     pv = 'U'
@@ -707,8 +873,8 @@ def animate_normalized_total_energy_by_depth_by_voltage_overlay_by_model(df, vol
             ax.grid(alpha=0.25)
             ax.set_title(py, fontsize='x-small')
             ax.set_xlabel('Depth (um)')
-        axs[0].set_ylim([0.65, 1.05])
-        axs[0].set_yticks([0.7, 0.8, 0.9, 1.0])
+        #axs[0].set_ylim([0.65, 1.05])
+        #axs[0].set_yticks([0.7, 0.8, 0.9, 1.0])
         axs[0].set_ylabel(r'$\tilde{E}$', labelpad=-2)
         axs[0].text(-0.05, 1.05, f'{voltage}V', color='black', fontsize=8,
                 horizontalalignment='left', verticalalignment='bottom', transform=axs[0].transAxes)
@@ -802,12 +968,10 @@ def find_first_energy_minima(x, y, print_id=''):
     if len(minima_index) > 0:
         first_minima_x = x[minima_index[0] + 1]  # +1 because np.diff reduces the length by 1
         first_minima_y = y[minima_index[0] + 1]
-        print(f"{print_id}: First minima found at "
-              f"x = {np.round(first_minima_x * 1e6, 1)}, "
-              f"y = {np.round(first_minima_y * 1e6, 4)} uJ")
+        # print(f"{print_id}: First minima found at " f"x = {np.round(first_minima_x * 1e6, 1)}, " f"y = {np.round(first_minima_y * 1e6, 4)} uJ")
     else:
         first_minima_x = first_minima_y = np.nan
-        print(f"{print_id}: No minima found.")
+        # print(f"{print_id}: No minima found.")
     return first_minima_x, first_minima_y
 
 
@@ -1004,3 +1168,111 @@ def plot_sweep_z_by_voltage_comp_E(df, key, labels, units, save_dir, save_id):
     plt.tight_layout()
     plt.savefig(join(save_dir, save_id + f'_z-by-v-by-compE_sweep-{key}.png'),
                 dpi=300, facecolor='w', bbox_inches='tight')
+
+def plot_sweep_energy_at_pull_in(df, key, labels, units, save_dir, save_id):
+    py0 = 'U'
+    py1 = 'Em_tot_i_comp'
+    py2 = 'Es_seg_sum_i'
+
+    fig, (ax0, ax1, ax2) = plt.subplots(nrows=3, sharex=True, figsize=(4, 4.5))
+    ax0.plot(df[key], df[py0], '-o')
+    ax0.set_ylabel(r'$V_{pull-in} \: (V)$')
+    ax0.grid(alpha=0.25)
+    ax1.plot(df[key], df[py1] * 1e6, '-o')
+    ax1.set_ylabel(r'$E_{elastic} \: (\mu J)$')
+    ax1.grid(alpha=0.25)
+    ax2.plot(df[key], df[py2] * 1e6, '-o')
+    ax2.set_ylabel(r'$E_{electrostatic} \: (\mu J)$')
+    ax2.set_xlabel(key)
+    ax2.grid(alpha=0.25)
+    plt.tight_layout()
+    plt.savefig(join(save_dir, save_id + f'_E-at-pullin_by_{key}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+
+def plot_thickness_and_stretch_state(df, key, labels, units, save_dir, save_id):
+    # arr_thickness_ps = [sweep_key, sweep_value, thickness_i, stretch_i, thickness_f, stretch_f]
+    df.to_excel(join(save_dir, save_id + f'_t-ps_by_{key}.xlsx'), index=False)
+    x = df[key].to_numpy()
+    y1a = df['thickness_i'].to_numpy()
+    y1b = df['stretch_i'].to_numpy()
+    y2a = df['thickness_f'].to_numpy()
+    y2b = df['stretch_f'].to_numpy().astype(float)
+
+    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(5, 5))
+    ax1.plot(x, y1a, 'k-o', ms=2)
+    ax1r = ax1.twinx()
+    ax1r.plot(x, y1b, 'r--s', ms=2)
+
+    ax1.set_ylabel(r"$t_{i} \: (\mu m)$")
+    ax1r.set_ylabel(r"$\lambda_{i}$", color='r')
+
+    ax2.plot(x, y2a, 'k-o', ms=2)
+    ax2r = ax2.twinx()
+    ax2r.plot(x, y2b, 'r--s', ms=2)
+
+    ax2.set_xlabel(f'{key} ({units})')
+    ax2.set_ylabel(r"$t_{f} \: (\mu m)$")
+    ax2r.set_ylabel(r"$\lambda_{f}$", color='r')
+    plt.tight_layout()
+    plt.savefig(join(save_dir, save_id + f'_t-ps_by_{key}.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    # plt.show()
+    plt.close()
+
+def plot_power_law_fit(df, key, labels, units, save_dir, save_id):
+    x = df[key].to_numpy()
+    y = df['U'].to_numpy()
+    summary = fit_power_law_scaling(x, y)
+    a_hat = summary['a_hat']
+    x_hat = summary['exponent_x_hat']
+    summary_df = pd.DataFrame([summary])
+    summary_df.to_excel(join(save_dir, save_id + f'_V-PI_by_{key}_power-law.xlsx'), index=False)
+
+    # --- Plot: data and fitted curve on log-log axes ---
+    # Build smooth curve across the data's E range
+    x_plot = np.linspace(x.min(), x.max(), 200)
+    V_fit_plot = a_hat * (x_plot ** x_hat)
+
+    fig, ax = plt.subplots(figsize=(4.5, 3.5))
+    ax.scatter(x, y, color='k', label="Model")
+    ax.plot(x_plot, V_fit_plot, color='r', label="Fit")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel(f'{key} ({units})')
+    ax.set_ylabel(r"$V_{PI} \: (V)$")
+    ax.grid(alpha=0.15)
+    ax.legend()
+    ax.set_title(f'Power-law fit: V_PI={a_hat:.2f}*(x)^{x_hat:.3f} (log-log)', fontsize=8)
+    plt.tight_layout()
+    plt.savefig(join(save_dir, save_id + f'_V-PI_by_{key}_power-law.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    # plt.show()
+    plt.close()
+
+def plot_pre_stretch_scaling_fit(df, key, labels, units, save_dir, save_id):
+    x = df[key].to_numpy()
+    y = df['U'].to_numpy()
+
+    # "Neo-Hookean tension model: V^2 = c0 + c1*(1 - λ^-6)"
+    c0, c1 = fit_pre_stretch_scaling(x, y)  # x must be lambda (pre-stretch); y is pull-in voltage
+
+    # --- Plot: data and fitted curve on log-log axes ---
+    # Build smooth curve across the data's E range
+    x_plot = np.linspace(x.min(), x.max(), 200)
+    V_fit_plot = neo_hookean_tension_model(x_plot, c0, c1)
+
+    fig, ax = plt.subplots(figsize=(5.0, 3.75))
+    ax.scatter(x, y, color='k', label="Model")
+    ax.plot(x_plot, V_fit_plot, color='r', label="Fit")
+    #ax.set_xscale("log")
+    #ax.set_yscale("log")
+    ax.set_xlabel(r'$\lambda_{0}$')
+    ax.set_ylabel(r"$V_{PI} \: (V)$")
+    ax.grid(alpha=0.15)
+    ax.legend()
+    ax.set_title(f'neo-Hookean tension model: V_PI=sqrt({c0:.3e}+{c1:.3e}*(1-λ^-6))', fontsize=8)
+    plt.tight_layout()
+    plt.savefig(join(save_dir, save_id + f'_V-PI_by_PS_neo-Hookean-tension.png'),
+                dpi=300, facecolor='w', bbox_inches='tight')
+    # plt.show()
+    plt.close()

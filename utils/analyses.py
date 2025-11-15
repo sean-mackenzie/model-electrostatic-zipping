@@ -143,8 +143,8 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
             plot_normalized_membrane_profile, frois_norm_profile = True, [40, 53, 80, 90, 100]
             plot_1D_dz_by_r_by_frois_with_surface_profile, frois_overlay = True, [40, 53, 80, 90, 100]
         else:
-            compare_pull_in_voltage_with_model = False
-            plot_depth_dependent_in_plane_stretch = False
+            compare_pull_in_voltage_with_model = True
+            plot_depth_dependent_in_plane_stretch = True
             plot_pids_dr_by_dz = False
             plot_pids_dz_by_voltage_hysteresis = False
             plot_normalized_membrane_profile, frois_norm_profile = False, [20, 35, 45, 103]
@@ -175,7 +175,7 @@ def second_pass(df, xym, tid, dict_settings, dict_test, path_results, animate_fr
     plot_pids_by_synchronous_time_voltage_monitor = True  # AC only
     # -
     # --- --- ANIMATIONS (True, False)
-    plot_quiver_xy_by_frame = False
+    plot_quiver_xy_by_frame = True
     plot_1D_dz_by_r_by_frame_with_surface_profile = True
     show_zipping_interface = True
     dr_ampl = 1

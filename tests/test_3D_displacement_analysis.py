@@ -86,14 +86,14 @@ def calculate_zipping_interface(df, przdr, dict_surf, acdc, frames=None):
 if __name__ == "__main__":
 
     # THESE ARE THE ONLY SETTINGS YOU SHOULD CHANGE
-    TEST_CONFIG = '03072025_W11-A1_C19-30pT_20+10nmAuX'
-    TIDS = [39]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
+    TEST_CONFIG = '03052025_W13-D1_C19-30pT_20+10nmAux'
+    TIDS = [0]  # [56, 62, 63] or np.arange(30, 70) or np.flip(np.arange(30, 70))
     ONLY_TIDS_WITH_TEST_SETTINGS = True
     IV_ACDC = 'AC'  # 'AC' or 'DC'
 
     # ---
 
-    ANIMATE_FRAMES = None  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
+    ANIMATE_FRAMES = np.arange(20, 190)  # None: defer to test_settings; to override test_settings: np.arange(20, 115)
     ANIMATE_RZDR = ('rg', 'd0z', 'drg')  # None = ('rg', 'd0z', 'drg'); or override: e.g., ('rg', 'dz', 'drg'). For cross-section plots and zipped coords
     # -
     # SETTINGS (True False)
@@ -106,10 +106,10 @@ if __name__ == "__main__":
     # ANALYSES
     XYM = ['g']  # ['g', 'm']: use sub-pixel or discrete in-plane localization
     SECOND_PASS = False  # True False
-    AVG_MAX_N = 0  # Gets used by both EXPORT_NET_D0ZR and SECOND_PASS
+    AVG_MAX_N = -1  # Gets used by both EXPORT_NET_D0ZR and SECOND_PASS
     EXPORT_NET_D0ZR = False  # True: export dfd0 to special directory
     EXPORT_ZIPPED_COORDS = False
-    EXPORT_ZIPPING_INTERFACE = True
+    EXPORT_ZIPPING_INTERFACE = False
     PLOT_ZIPPING_INTERFACE, AND_SAVE = True, True  # Only plots if EXPORT_ZIPPING_INTERFACE is True
     ZIPPED_ONLY_FRAMES = None
     # -

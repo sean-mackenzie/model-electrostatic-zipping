@@ -187,7 +187,7 @@ def deprecated_compute_derived_memb_settings(dict_memb_settings):
 
 def get_membrane_settings(memb_id):
     base_dir = '/Users/mackenzie/Library/CloudStorage/Box-Box/2024/zipper_paper/Testing/Zipper Actuation/00__metallized-membranes'
-    fp = join(base_dir, 'membrane_io.xlsx')
+    fp = join(base_dir, 'membrane_io_MoT.xlsx')  # 8/2/2025: added '_MoT' to model MoTs (original file unchanged)
     df = pd.read_excel(fp, index_col=0, sheet_name='outputs')
 
     dict_memb_settings = {'memb_id': memb_id}
